@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>CodeDrop — Ephemeral Code Share</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -24,313 +24,508 @@
     --text3: #4a5275;
     --mono: 'JetBrains Mono', monospace;
     --sans: 'Syne', sans-serif;
+    --bottom-nav-h: 60px;
+    --header-h: 52px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--mono);
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
+    height: 100%;
+    height: 100dvh;
     overflow: hidden;
+    touch-action: manipulation;
   }
 
-  /* HEADER */
+  /* ── HEADER ── */
   header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; height: 52px;
-    background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+    padding: 0 16px; height: var(--header-h);
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-shrink: 0; position: relative; z-index: 100;
   }
   .logo {
-    font-family: var(--sans); font-weight: 800; font-size: 18px; letter-spacing: -0.5px;
+    font-family: var(--sans); font-weight: 800; font-size: 17px; letter-spacing: -0.5px;
     background: linear-gradient(135deg, var(--accent), var(--accent2));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
-  .logo span { -webkit-text-fill-color: var(--text3); font-weight: 400; font-size: 12px; margin-left: 8px; }
+  .logo-sub { -webkit-text-fill-color: var(--text3); font-weight: 400; font-size: 11px; margin-left: 6px; }
   .logo a { color: var(--accent); text-decoration: none; -webkit-text-fill-color: var(--accent); }
-  .logo a:hover { text-decoration: underline; }
-  .header-right { display: flex; align-items: center; gap: 12px; }
-  .status-dot {
-    width: 8px; height: 8px; border-radius: 50%; background: var(--text3); transition: background 0.3s;
+  .header-right { display: flex; align-items: center; gap: 10px; }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 10px; font-size: 10px; color: var(--text3);
   }
-  .status-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text3); transition: background 0.3s; flex-shrink: 0;
+  }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
   .status-dot.connecting { background: var(--amber); animation: pulse 1s infinite; }
   .status-dot.error { background: var(--red); }
-  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
-  #status-text { font-size: 11px; color: var(--text3); }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+  .icon-btn {
+    background: transparent; border: 1px solid var(--border2); color: var(--text2);
+    font-size: 16px; width: 34px; height: 34px; border-radius: 8px;
+    cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover, .icon-btn:active { border-color: var(--accent); color: var(--accent); background: rgba(91,124,255,0.08); }
+  .icon-btn.danger { color: var(--red); border-color: var(--red); }
 
   .btn {
     background: transparent; border: 1px solid var(--border2); color: var(--text2);
-    font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 6px;
-    cursor: pointer; transition: all 0.2s;
+    font-family: var(--mono); font-size: 11px; padding: 7px 14px; border-radius: 8px;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap;
   }
   .btn:hover { border-color: var(--accent); color: var(--accent); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
-  .btn.primary:hover { background: var(--accent2); border-color: var(--accent2); }
+  .btn.primary:hover, .btn.primary:active { background: var(--accent2); border-color: var(--accent2); }
   .btn.danger { color: var(--red); border-color: var(--red); }
-  .btn.danger:hover { background: rgba(255,95,95,0.1); }
 
-  /* SETUP SCREEN */
+  /* ── CONN BANNER ── */
+  #conn-banner {
+    background: rgba(245,166,35,0.1); border-bottom: 1px solid rgba(245,166,35,0.3);
+    padding: 6px 16px; font-size: 11px; color: var(--amber); display: none;
+    text-align: center; flex-shrink: 0;
+  }
+
+  /* ══════════════════════════════════════
+     SETUP SCREEN
+  ══════════════════════════════════════ */
   #setup-screen {
-    flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px;
+    position: fixed; inset: 0; z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; background: var(--bg);
+    overflow-y: auto;
   }
   .setup-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-    padding: 40px; width: 100%; max-width: 480px;
+    padding: 28px 24px; width: 100%; max-width: 440px;
   }
-  .setup-card h1 { font-family: var(--sans); font-weight: 800; font-size: 26px; margin-bottom: 4px; }
-  .setup-card .byline { font-size: 11px; color: var(--text3); margin-bottom: 6px; }
+  .setup-card h1 { font-family: var(--sans); font-weight: 800; font-size: 24px; margin-bottom: 4px; }
+  .setup-card .byline { font-size: 11px; color: var(--text3); margin-bottom: 16px; }
   .setup-card .byline a { color: var(--accent); text-decoration: none; }
-  .setup-card p { color: var(--text2); font-size: 12px; margin-bottom: 28px; line-height: 1.6; margin-top: 10px; }
-  .field { margin-bottom: 16px; }
-  .field label { display: block; font-size: 11px; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .setup-card p { color: var(--text2); font-size: 12px; margin-bottom: 24px; line-height: 1.6; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 10px; color: var(--text3); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
   .field input {
     width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-    font-family: var(--mono); font-size: 13px; padding: 10px 14px; border-radius: 8px; outline: none; transition: border-color 0.2s;
+    font-family: var(--mono); font-size: 14px; padding: 11px 14px; border-radius: 10px;
+    outline: none; transition: border-color 0.2s; -webkit-appearance: none;
   }
   .field input:focus { border-color: var(--accent); }
-  .server-field { margin-bottom: 20px; }
-  .server-field label { display: block; font-size: 11px; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .server-field input {
-    width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
-    font-family: var(--mono); font-size: 11px; padding: 8px 12px; border-radius: 8px; outline: none; transition: border-color 0.2s;
-  }
-  .server-field input:focus { border-color: var(--border2); color: var(--text); }
+
   .divider {
-    text-align: center; color: var(--text3); font-size: 11px; margin: 24px 0; position: relative;
+    text-align: center; color: var(--text3); font-size: 11px; margin: 20px 0; position: relative;
   }
-  .divider::before,.divider::after {
-    content:''; position:absolute; top:50%; width:42%; height:1px; background:var(--border);
-  }
-  .divider::before { left:0; } .divider::after { right:0; }
+  .divider::before,.divider::after { content:''; position:absolute; top:50%; width:42%; height:1px; background:var(--border); }
+  .divider::before{left:0;} .divider::after{right:0;}
 
-  /* MAIN LAYOUT */
-  #chat-screen { flex: 1; display: none; overflow: hidden; }
-  .chat-layout { display: grid; grid-template-columns: 220px 1fr 320px; height: 100%; }
-
-  /* SIDEBAR */
-  .sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-  .sidebar-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); }
-  #peer-list { flex: 1; overflow-y: auto; padding: 8px; }
-  .peer-item {
-    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: background 0.15s;
+  /* ══════════════════════════════════════
+     CHAT SCREEN — MOBILE LAYOUT
+  ══════════════════════════════════════ */
+  #app {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+    height: 100dvh;
+    position: relative;
+    overflow: hidden;
   }
-  .peer-item:hover { background: var(--surface2); }
-  .peer-item.active { background: var(--surface3); }
-  .peer-avatar { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-family: var(--sans); font-weight: 700; font-size: 13px; flex-shrink: 0; }
-  .peer-info { flex: 1; min-width: 0; }
-  .peer-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .peer-sub { font-size: 10px; color: var(--text3); }
-  .unread-badge { background: var(--accent); color: #fff; font-size: 10px; min-width: 18px; height: 18px; border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
-  .room-section { border-top: 1px solid var(--border); padding: 12px; }
-  .room-id-display {
-    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
-    font-size: 10px; color: var(--text3); cursor: pointer; transition: all 0.2s;
+
+  /* MOBILE: single column, views stacked */
+  .view {
+    position: absolute;
+    inset: 0;
+    top: var(--header-h);
+    bottom: calc(var(--bottom-nav-h) + var(--safe-bottom));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: translateX(100%);
+    transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    will-change: transform;
+  }
+  .view.active { transform: translateX(0); }
+
+  /* ── PEERS VIEW ── */
+  #view-peers {
+    background: var(--surface);
+  }
+  .view-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3);
     display: flex; align-items: center; justify-content: space-between;
   }
-  .room-id-display:hover { border-color: var(--accent); color: var(--text2); }
-  .room-id-display .room-val { color: var(--accent); font-size: 11px; }
+  #peer-list { flex: 1; overflow-y: auto; padding: 8px; -webkit-overflow-scrolling: touch; }
 
-  /* CHAT AREA */
-  .chat-area { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
-  .chat-header {
-    padding: 12px 20px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between; background: var(--surface);
+  .peer-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 12px; border-radius: 10px; cursor: pointer; transition: background 0.15s;
+    min-height: 56px;
   }
-  .chat-target { font-size: 13px; font-weight: 500; }
-  .chat-target-sub { font-size: 10px; color: var(--text3); }
-  #messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-  #messages::-webkit-scrollbar { width: 4px; }
-  #messages::-webkit-scrollbar-track { background: transparent; }
-  #messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .peer-item:active { background: var(--surface2); }
+  .peer-item.active { background: var(--surface3); }
+  .peer-avatar { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .peer-info { flex: 1; min-width: 0; }
+  .peer-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .peer-sub { font-size: 10px; color: var(--text3); margin-top: 2px; }
+  .unread-badge { background: var(--accent); color: #fff; font-size: 10px; min-width: 20px; height: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 0 5px; flex-shrink: 0; }
 
-  .msg { display: flex; gap: 10px; animation: msgIn 0.2s ease; }
-  @keyframes msgIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .room-box {
+    border-top: 1px solid var(--border);
+    padding: 14px 16px;
+    padding-bottom: calc(14px + var(--safe-bottom));
+  }
+  .room-id-display {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; font-size: 11px; color: var(--text3); cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    transition: border-color 0.2s;
+  }
+  .room-id-display:active { border-color: var(--accent); }
+  .room-val { color: var(--accent); font-size: 12px; font-weight: 500; word-break: break-all; flex: 1; text-align: center; }
+
+  /* ── CHAT VIEW ── */
+  #view-chat {
+    background: var(--bg);
+  }
+
+  .chat-sub-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .chat-target-name { font-size: 13px; font-weight: 500; }
+  .chat-target-sub { font-size: 10px; color: var(--text3); }
+
+  #messages {
+    flex: 1; overflow-y: auto; padding: 14px 14px;
+    display: flex; flex-direction: column; gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  #messages::-webkit-scrollbar { display: none; }
+
+  .msg { display: flex; gap: 8px; animation: msgIn 0.2s ease; }
+  @keyframes msgIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
   .msg.own { flex-direction: row-reverse; }
-  .msg-avatar { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: var(--sans); font-weight: 700; font-size: 11px; flex-shrink: 0; margin-top: 2px; }
-  .msg-content { max-width: 70%; }
+  .msg-avatar { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px; }
+  .msg-content { max-width: 80%; }
   .msg.own .msg-content { align-items: flex-end; display: flex; flex-direction: column; }
-  .msg-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .msg-meta { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
   .msg.own .msg-meta { flex-direction: row-reverse; }
   .msg-name { font-size: 10px; color: var(--text3); }
   .msg-time { font-size: 10px; color: var(--text3); }
-  .msg-bubble { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; font-size: 13px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
-  .msg.own .msg-bubble { background: rgba(91,124,255,0.15); border-color: rgba(91,124,255,0.3); }
+  .msg-bubble { background: var(--surface2); border: 1px solid var(--border); border-radius: 14px; border-top-left-radius: 4px; padding: 9px 13px; font-size: 13px; line-height: 1.5; word-break: break-word; white-space: pre-wrap; }
+  .msg.own .msg-bubble { background: rgba(91,124,255,0.15); border-color: rgba(91,124,255,0.3); border-top-right-radius: 4px; border-top-left-radius: 14px; }
 
   /* Code bubble */
-  .msg-code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; max-width: 100%; min-width: 280px; }
-  .code-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .msg-code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; min-width: min(260px, 90vw); max-width: 90vw; }
+  .code-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--surface2); border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 4px; }
   .code-lang { font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
-  .code-filename { font-size: 10px; color: var(--text2); }
-  .code-actions { display: flex; gap: 6px; }
-  .code-btn { background: transparent; border: 1px solid var(--border2); color: var(--text3); font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 4px; cursor: pointer; transition: all 0.15s; }
-  .code-btn:hover { color: var(--text); border-color: var(--text2); }
-  .code-body { padding: 12px 14px; overflow-x: auto; max-height: 300px; overflow-y: auto; }
+  .code-filename { font-size: 10px; color: var(--text2); flex: 1; margin: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .code-actions { display: flex; gap: 5px; }
+  .code-btn { background: transparent; border: 1px solid var(--border2); color: var(--text3); font-family: var(--mono); font-size: 10px; padding: 4px 10px; border-radius: 5px; cursor: pointer; min-height: 28px; }
+  .code-btn:active { color: var(--text); border-color: var(--text2); }
+  .code-body { padding: 12px 14px; overflow-x: auto; max-height: 240px; overflow-y: auto; }
   .code-body pre { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre; }
 
   /* File bubble */
   .msg-file-block {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 12px 14px; display: flex; align-items: center; gap: 12px; min-width: 240px;
-    cursor: pointer; transition: border-color 0.2s;
+    padding: 12px 14px; display: flex; align-items: center; gap: 12px;
+    min-width: min(220px, 80vw); max-width: 90vw; cursor: pointer;
   }
-  .msg-file-block:hover { border-color: var(--accent); }
+  .msg-file-block:active { border-color: var(--accent); }
   .file-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
   .file-info { flex: 1; min-width: 0; }
   .file-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .file-size { font-size: 10px; color: var(--text3); margin-top: 2px; }
-  .file-dl { font-size: 18px; color: var(--accent); flex-shrink: 0; }
+  .file-dl { font-size: 20px; color: var(--accent); flex-shrink: 0; }
 
-  /* INPUT BAR */
-  .input-bar { padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-  .input-tools { display: flex; align-items: center; gap: 6px; }
-  .tool-btn { background: transparent; border: 1px solid var(--border); color: var(--text3); font-family: var(--mono); font-size: 10px; padding: 5px 10px; border-radius: 6px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 5px; }
-  .tool-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .tool-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(91,124,255,0.08); }
+  /* ── INPUT BAR ── */
+  .input-bar {
+    padding: 10px 12px;
+    padding-bottom: calc(10px + var(--safe-bottom));
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+  }
+  .input-tools { display: flex; align-items: center; gap: 6px; overflow-x: auto; }
+  .input-tools::-webkit-scrollbar { display: none; }
+  .tool-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text3);
+    font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 8px;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap; min-height: 34px;
+  }
+  .tool-btn:active, .tool-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(91,124,255,0.08); }
   .input-row { display: flex; gap: 8px; align-items: flex-end; }
-  #msg-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 13px; padding: 10px 14px; border-radius: 8px; outline: none; resize: none; min-height: 40px; max-height: 120px; line-height: 1.5; transition: border-color 0.2s; }
+
+  #msg-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 14px; padding: 10px 14px; border-radius: 10px;
+    outline: none; resize: none; min-height: 44px; max-height: 100px; line-height: 1.4;
+    transition: border-color 0.2s; -webkit-appearance: none;
+  }
   #msg-input:focus { border-color: var(--accent); }
   #msg-input::placeholder { color: var(--text3); }
-  #send-btn { background: var(--accent); border: none; color: #fff; font-family: var(--mono); font-size: 14px; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  #send-btn:hover { background: var(--accent2); transform: scale(1.05); }
-  #send-btn:active { transform: scale(0.97); }
 
-  /* CODE PANEL */
-  .code-panel { background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-  .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .panel-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text3); }
-  .panel-tabs { display: flex; border-bottom: 1px solid var(--border); }
-  .panel-tab { flex: 1; padding: 8px; text-align: center; font-size: 11px; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; }
-  .panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .panel-tab:hover { color: var(--text2); }
-  .panel-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 12px; gap: 8px; }
-  .panel-field { display: flex; flex-direction: column; gap: 4px; }
-  .panel-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
-  .panel-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 7px 10px; border-radius: 6px; outline: none; transition: border-color 0.2s; width: 100%; }
-  .panel-input:focus { border-color: var(--accent); }
-  #code-editor { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 12px; border-radius: 8px; outline: none; resize: none; line-height: 1.6; transition: border-color 0.2s; min-height: 0; }
-  #code-editor:focus { border-color: var(--accent); }
+  #send-btn {
+    background: var(--accent); border: none; color: #fff; font-size: 18px;
+    width: 44px; height: 44px; border-radius: 10px; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  #send-btn:active { background: var(--accent2); transform: scale(0.95); }
 
-  /* FILE DROP ZONE */
-  .drop-zone { border: 1.5px dashed var(--border2); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s; color: var(--text3); font-size: 12px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
-  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: rgba(91,124,255,0.05); color: var(--text2); }
-  .drop-icon { font-size: 28px; }
-  .drop-title { font-size: 13px; color: var(--text2); }
+  /* File drop zone (in chat) */
+  .drop-zone {
+    border: 1.5px dashed var(--border2); border-radius: 12px; padding: 24px 16px;
+    text-align: center; cursor: pointer; color: var(--text3); font-size: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  }
+  .drop-zone:active, .drop-zone.drag-over { border-color: var(--accent); background: rgba(91,124,255,0.05); }
+  .drop-icon { font-size: 32px; }
+  .drop-title { font-size: 14px; color: var(--text2); font-weight: 500; }
   #file-input { display: none; }
 
-  /* SYSTEM MSG */
-  .sys-msg { text-align: center; font-size: 11px; color: var(--text3); padding: 4px 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
-  .sys-msg::before,.sys-msg::after { content:''; flex:1; height:1px; background:var(--border); max-width:60px; }
+  /* ── CODE VIEW ── */
+  #view-code {
+    background: var(--surface);
+  }
+  .panel-tabs {
+    display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .panel-tab {
+    flex: 1; padding: 12px 8px; text-align: center; font-size: 12px; color: var(--text3);
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel-tab:active { color: var(--text2); }
 
-  /* EMPTY STATE */
-  .empty-state { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--text3); padding:40px; text-align:center; }
+  .panel-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 12px; gap: 10px; }
+  .panel-field { display: flex; flex-direction: column; gap: 5px; }
+  .panel-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .panel-input {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 13px; padding: 9px 12px; border-radius: 8px;
+    outline: none; transition: border-color 0.2s; width: 100%; -webkit-appearance: none;
+  }
+  .panel-input:focus { border-color: var(--accent); }
+
+  #code-editor {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 13px; padding: 12px; border-radius: 10px;
+    outline: none; resize: none; line-height: 1.6; min-height: 0; -webkit-appearance: none;
+  }
+  #code-editor:focus { border-color: var(--accent); }
+
+  .tab-panel { display: none; flex: 1; flex-direction: column; gap: 10px; overflow: hidden; }
+  .tab-panel.active { display: flex; }
+
+  .broadcast-note {
+    font-size: 11px; color: var(--text3); padding: 7px 10px;
+    background: rgba(91,124,255,0.05); border: 1px solid rgba(91,124,255,0.15); border-radius: 8px;
+  }
+
+  /* ── BOTTOM NAV ── */
+  #bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: calc(var(--bottom-nav-h) + var(--safe-bottom));
+    padding-bottom: var(--safe-bottom);
+    background: var(--surface); border-top: 1px solid var(--border);
+    display: none; align-items: stretch;
+    z-index: 100;
+  }
+  .nav-btn {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; cursor: pointer; color: var(--text3); font-family: var(--mono);
+    font-size: 10px; transition: color 0.15s; position: relative; min-height: 0;
+    background: transparent; border: none; padding: 0;
+  }
+  .nav-btn:active { color: var(--text2); }
+  .nav-btn.active { color: var(--accent); }
+  .nav-icon { font-size: 20px; line-height: 1; }
+  .nav-badge {
+    position: absolute; top: 6px; right: calc(50% - 18px);
+    background: var(--red); color: #fff; font-size: 9px;
+    min-width: 16px; height: 16px; border-radius: 8px;
+    display: none; align-items: center; justify-content: center; padding: 0 4px;
+  }
+  .nav-badge.show { display: flex; }
+
+  /* ── SYSTEM MSG ── */
+  .sys-msg {
+    text-align: center; font-size: 11px; color: var(--text3); padding: 3px 0;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .sys-msg::before,.sys-msg::after { content:''; flex:1; height:1px; background:var(--border); max-width:50px; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:12px; color:var(--text3); padding:40px; text-align:center;
+  }
   .empty-icon { font-size: 40px; }
   .empty-title { font-family: var(--sans); font-weight: 700; font-size: 16px; color: var(--text2); }
-  .empty-sub { font-size: 12px; line-height: 1.6; max-width: 300px; }
+  .empty-sub { font-size: 12px; line-height: 1.6; max-width: 280px; }
 
-  /* TOAST */
-  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface2); border: 1px solid var(--border2); color: var(--text); font-size: 12px; padding: 10px 18px; border-radius: 8px; opacity: 0; transition: all 0.3s; z-index: 999; pointer-events: none; white-space: nowrap; }
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 12px); left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--surface2); border: 1px solid var(--border2); color: var(--text);
+    font-size: 12px; padding: 10px 18px; border-radius: 10px;
+    opacity: 0; transition: all 0.3s; z-index: 999; pointer-events: none;
+    white-space: nowrap; max-width: 90vw; overflow: hidden; text-overflow: ellipsis;
+  }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* SCROLLBARS */
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 3px; height: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-  /* TAB PANELS */
-  .tab-panel { display: none; flex: 1; flex-direction: column; gap: 8px; overflow: hidden; }
-  .tab-panel.active { display: flex; }
-  .broadcast-note { font-size: 11px; color: var(--text3); padding: 6px 8px; background: rgba(91,124,255,0.05); border: 1px solid rgba(91,124,255,0.15); border-radius: 6px; }
+  /* ══════════════════════════════════════
+     DESKTOP LAYOUT (≥ 768px)
+  ══════════════════════════════════════ */
+  @media (min-width: 768px) {
+    :root { --bottom-nav-h: 0px; }
 
-  /* TRANSFER PROGRESS */
-  .transfer-progress { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 6px; }
-  .transfer-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s; width: 0%; }
+    #app { flex-direction: column; }
 
-  /* CONNECTION NOTICE */
-  #conn-banner {
-    background: rgba(245,166,35,0.1); border-bottom: 1px solid rgba(245,166,35,0.3);
-    padding: 8px 20px; font-size: 11px; color: var(--amber); display: none; flex-shrink: 0;
-    text-align: center;
+    .view {
+      position: static;
+      transform: none !important;
+      transition: none;
+    }
+
+    .desktop-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr 300px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    #view-peers {
+      border-right: 1px solid var(--border);
+    }
+
+    #view-chat {
+      background: var(--bg);
+    }
+
+    #view-code {
+      border-left: 1px solid var(--border);
+    }
+
+    /* hide bottom nav on desktop */
+    #bottom-nav { display: none !important; }
+
+    /* restore desktop chat header */
+    .chat-sub-header { display: flex; }
+
+    /* fix peer list bottom padding on desktop */
+    .room-box { padding-bottom: 14px; }
+    .input-bar { padding-bottom: 12px; }
+  }
+
+  @media (min-width: 1024px) {
+    .desktop-layout { grid-template-columns: 240px 1fr 320px; }
+  }
+
+  /* Mobile specifics */
+  @media (max-width: 767px) {
+    .msg-content { max-width: 85%; }
+    #bottom-nav { display: flex; }
+    .desktop-layout { display: contents; }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">
-    CodeDrop
-    <span>by <a href="https://github.com/manisprasad" target="_blank">Manis</a></span>
-  </div>
-  <div class="header-right">
-    <div class="status-dot" id="status-dot"></div>
-    <span id="status-text">disconnected</span>
-    <button class="btn" id="copy-room-btn" style="display:none">copy room id</button>
-    <button class="btn danger" id="leave-btn" style="display:none">leave</button>
-  </div>
-</header>
-
-<div id="conn-banner">⚠ Reconnecting to signaling server...</div>
-
-<!-- SETUP SCREEN -->
 <div id="setup-screen">
   <div class="setup-card">
     <h1>CodeDrop</h1>
     <div class="byline">by <a href="https://github.com/manisprasad" target="_blank">Manis</a></div>
-    <p>Share code, .env files, zips and text — peer-to-peer via WebRTC. No data stored. Everything vanishes on refresh.</p>
-
+    <p>Share code, .env files, zips — P2P via WebRTC. No data stored. Everything vanishes on refresh.</p>
     <div class="field">
       <label>Your Name</label>
       <input type="text" id="setup-name" placeholder="e.g. manis" maxlength="20" autocomplete="off" />
     </div>
-
-    <button class="btn primary" id="create-btn" style="width:100%; margin-bottom:8px">+ create new room</button>
+    <button class="btn primary" id="create-btn" style="width:100%;margin-bottom:10px;padding:12px">+ create new room</button>
     <div class="divider">or join existing</div>
     <div class="field">
       <label>Room ID</label>
-      <input type="text" id="setup-room" placeholder="paste room id here..." autocomplete="off" />
+      <input type="text" id="setup-room" placeholder="paste room id here..." autocomplete="off" style="text-transform:uppercase" />
     </div>
-    <button class="btn primary" id="join-btn" style="width:100%">join room →</button>
+    <button class="btn primary" id="join-btn" style="width:100%;padding:12px">join room →</button>
   </div>
 </div>
 
-<!-- CHAT SCREEN -->
-<div id="chat-screen">
-  <div class="chat-layout">
+<div id="app">
+  <header>
+    <div class="logo">
+      CodeDrop<span class="logo-sub">by <a href="https://github.com/manisprasad" target="_blank">Manis</a></span>
+    </div>
+    <div class="header-right">
+      <div class="status-pill">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">offline</span>
+      </div>
+      <button class="icon-btn" id="copy-room-btn" style="display:none" title="Copy room ID">📋</button>
+      <button class="icon-btn danger" id="leave-btn" style="display:none" title="Leave room">✕</button>
+    </div>
+  </header>
 
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-      <div class="sidebar-header">peers in room</div>
+  <div id="conn-banner">⚠ Reconnecting to signaling server...</div>
+
+  <div class="desktop-layout">
+
+    <!-- PEERS VIEW -->
+    <div class="view active" id="view-peers">
+      <div class="view-header">
+        <span>peers in room</span>
+        <span id="peer-count-label" style="color:var(--text3);font-size:10px"></span>
+      </div>
       <div id="peer-list">
-        <div style="padding:16px; font-size:11px; color:var(--text3); text-align:center;">
-          Waiting for peers...<br><span style="font-size:10px;">Share your Room ID</span>
+        <div style="padding:20px 16px; font-size:12px; color:var(--text3); text-align:center; line-height:1.8">
+          Waiting for peers...<br><span style="font-size:10px">Share your Room ID</span>
         </div>
       </div>
-      <div class="room-section">
-        <div class="room-id-display" id="room-display" title="Click to copy">
-          <span>room</span>
+      <div class="room-box">
+        <div class="room-id-display" id="room-display" title="Tap to copy">
+          <span style="font-size:10px;color:var(--text3)">room</span>
           <span class="room-val" id="room-val-display">—</span>
           <span>📋</span>
         </div>
-        <div style="font-size:10px; color:var(--text3); margin-top:6px; text-align:center;">click to copy & share</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">tap to copy & share</div>
       </div>
     </div>
 
-    <!-- CHAT -->
-    <div class="chat-area">
-      <div class="chat-header">
+    <!-- CHAT VIEW -->
+    <div class="view" id="view-chat">
+      <div class="chat-sub-header">
         <div>
-          <div class="chat-target" id="chat-target-name">broadcast</div>
+          <div class="chat-target-name" id="chat-target-name">broadcast</div>
           <div class="chat-target-sub" id="chat-target-sub">all peers in room</div>
         </div>
-        <div style="font-size:11px; color:var(--text3)" id="peer-count-label"></div>
       </div>
 
       <div id="messages">
         <div class="empty-state">
           <div class="empty-icon">⚡</div>
           <div class="empty-title">Room is live</div>
-          <div class="empty-sub">Share your Room ID from the sidebar. Everything vanishes on refresh.</div>
+          <div class="empty-sub">Share your Room ID. Switch to Peers tab to see who's online.</div>
         </div>
       </div>
 
@@ -344,36 +539,37 @@
           <textarea id="msg-input" placeholder="type a message..." rows="1"></textarea>
           <button id="send-btn" onclick="sendText()">↑</button>
         </div>
-        <div id="input-code-mode" class="input-row" style="display:none">
-          <div style="font-size:11px; color:var(--text3); flex:1; padding:8px;">Use the code panel on the right →</div>
+        <div id="input-code-mode" style="display:none">
+          <div style="font-size:11px;color:var(--text3);padding:8px 4px">
+            Go to the <strong style="color:var(--accent)">Code</strong> tab →
+          </div>
         </div>
         <div id="input-file-mode" style="display:none">
-          <label class="drop-zone" id="drop-zone" for="file-input">
+          <label class="drop-zone" for="file-input">
             <div class="drop-icon">📂</div>
-            <div class="drop-title">drop file here</div>
-            <div>or click to browse · any file type · sent P2P</div>
+            <div class="drop-title">drop or tap to browse</div>
+            <div style="font-size:11px">any file type · sent P2P</div>
           </label>
           <input type="file" id="file-input" multiple />
         </div>
       </div>
     </div>
 
-    <!-- CODE PANEL -->
-    <div class="code-panel">
-      <div class="panel-header"><span class="panel-title">code panel</span></div>
+    <!-- CODE VIEW -->
+    <div class="view" id="view-code">
       <div class="panel-tabs">
-        <div class="panel-tab active" onclick="switchPanel('code')">snippet</div>
-        <div class="panel-tab" onclick="switchPanel('env')">.env</div>
+        <div class="panel-tab active" onclick="switchCodePanel('code')">snippet</div>
+        <div class="panel-tab" onclick="switchCodePanel('env')">.env</div>
       </div>
 
       <div class="tab-panel active" id="panel-code">
         <div class="panel-body">
-          <div style="display:flex; gap:8px;">
+          <div style="display:flex;gap:8px">
             <div class="panel-field" style="flex:1">
               <label class="panel-label">filename</label>
               <input type="text" class="panel-input" id="code-filename" placeholder="index.js" />
             </div>
-            <div class="panel-field" style="width:90px">
+            <div class="panel-field" style="width:88px">
               <label class="panel-label">lang</label>
               <select class="panel-input" id="code-lang" style="background:var(--surface2)">
                 <option>js</option><option>ts</option><option>py</option><option>go</option>
@@ -384,8 +580,8 @@
             </div>
           </div>
           <textarea id="code-editor" placeholder="// paste or type code here..."></textarea>
-          <div class="broadcast-note">Sent P2P via WebRTC to all peers</div>
-          <button class="btn primary" onclick="sendCode()" style="width:100%">send snippet ↑</button>
+          <div class="broadcast-note">Sent P2P via WebRTC</div>
+          <button class="btn primary" onclick="sendCode()" style="width:100%;padding:12px">send snippet ↑</button>
         </div>
       </div>
 
@@ -395,23 +591,43 @@
             <label class="panel-label">filename</label>
             <input type="text" class="panel-input" id="env-filename" placeholder=".env.production" />
           </div>
-          <textarea id="env-editor" class="panel-input" style="flex:1; min-height:0; resize:none; line-height:1.6; padding:10px 12px;"
+          <textarea id="env-editor" class="panel-input"
+            style="flex:1;min-height:0;resize:none;line-height:1.6;padding:10px 12px"
             placeholder="DATABASE_URL=postgres://...&#10;API_KEY=sk-...&#10;SECRET=..."></textarea>
-          <div class="broadcast-note" style="color:var(--red); border-color:rgba(255,95,95,0.2); background:rgba(255,95,95,0.04)">
+          <div class="broadcast-note" style="color:var(--red);border-color:rgba(255,95,95,0.2);background:rgba(255,95,95,0.04)">
             ⚠ sent P2P — cleared on refresh
           </div>
-          <button class="btn primary" onclick="sendEnv()" style="width:100%">send .env ↑</button>
+          <button class="btn primary" onclick="sendEnv()" style="width:100%;padding:12px">send .env ↑</button>
         </div>
       </div>
     </div>
-  </div>
-</div>
+
+  </div><!-- end desktop-layout -->
+
+  <!-- BOTTOM NAV (mobile only) -->
+  <nav id="bottom-nav">
+    <button class="nav-btn active" id="nav-peers" onclick="showView('peers')">
+      <span class="nav-icon">👥</span>
+      <span>Peers</span>
+    </button>
+    <button class="nav-btn" id="nav-chat" onclick="showView('chat')">
+      <span class="nav-icon">💬</span>
+      <span>Chat</span>
+      <span class="nav-badge" id="chat-badge">0</span>
+    </button>
+    <button class="nav-btn" id="nav-code" onclick="showView('code')">
+      <span class="nav-icon">{}</span>
+      <span>Code</span>
+    </button>
+  </nav>
+
+</div><!-- end app -->
 
 <div id="toast"></div>
 
 <script>
 // ══════════════════════════════════════════
-// CONFIG
+// CONFIG & STATE
 // ══════════════════════════════════════════
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -419,19 +635,16 @@ const ICE_SERVERS = [
   { urls: 'stun:stun2.l.google.com:19302' },
 ];
 
-// ══════════════════════════════════════════
-// STATE
-// ══════════════════════════════════════════
-let myId = null;
-let myName = null;
-let roomId = null;
-let signalingUrl = null;
-let ws = null;
-let wsReconnectTimer = null;
-let peers = {};       // peerId -> { pc, dc, name, unread, color, avatar, dcOpen }
+const SIGNALING_URL = 'wss://codedrop-tlt0.onrender.com';
+
+let myId = null, myName = null, roomId = null;
+let ws = null, wsReconnectTimer = null;
+let peers = {};
 let selectedPeer = 'broadcast';
 let inputMode = 'text';
-const fileStore = {};  // fileDataId -> { name, data }
+let currentView = 'peers'; // mobile active view
+let unreadChat = 0;
+const fileStore = {};
 
 const COLORS = ['#5b7cff','#7b5bf6','#2dba7a','#f5a623','#ff5f5f','#00c9b1','#ff7849'];
 const AVATARS = ['🦊','🐉','🤖','🦁','🐺','🦅','🐬','🦋'];
@@ -443,12 +656,41 @@ function ts() { return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'
 function formatSize(b) { if(b<1024)return b+'B'; if(b<1048576)return(b/1024).toFixed(1)+'KB'; return(b/1048576).toFixed(1)+'MB'; }
 
 // ══════════════════════════════════════════
+// MOBILE VIEW SWITCHING
+// ══════════════════════════════════════════
+function showView(view) {
+  if (window.innerWidth >= 768) return; // desktop: all visible
+  currentView = view;
+  ['peers','chat','code'].forEach(v => {
+    document.getElementById('view-'+v).classList.toggle('active', v === view);
+    const nb = document.getElementById('nav-'+v);
+    if (nb) nb.classList.toggle('active', v === view);
+  });
+  if (view === 'chat') {
+    unreadChat = 0;
+    document.getElementById('chat-badge').classList.remove('show');
+    setTimeout(() => {
+      const m = document.getElementById('messages');
+      m.scrollTop = m.scrollHeight;
+    }, 100);
+  }
+}
+
+function notifyChatUnread() {
+  if (currentView !== 'chat' || window.innerWidth < 768) {
+    unreadChat++;
+    const badge = document.getElementById('chat-badge');
+    badge.textContent = unreadChat > 9 ? '9+' : unreadChat;
+    badge.classList.add('show');
+  }
+}
+
+// ══════════════════════════════════════════
 // SETUP
 // ══════════════════════════════════════════
 document.getElementById('create-btn').onclick = () => {
   const name = document.getElementById('setup-name').value.trim();
   if (!name) { showToast('Enter your name'); return; }
-  signalingUrl = 'https://codedrop-tlt0.onrender.com';
   roomId = randomId(6);
   initRoom(name);
 };
@@ -458,10 +700,16 @@ document.getElementById('join-btn').onclick = () => {
   const rid = document.getElementById('setup-room').value.trim();
   if (!name) { showToast('Enter your name'); return; }
   if (!rid) { showToast('Enter a room ID'); return; }
-  signalingUrl = 'https://codedrop-tlt0.onrender.com';
   roomId = rid.toUpperCase();
   initRoom(name);
 };
+
+document.getElementById('setup-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const rid = document.getElementById('setup-room').value.trim();
+    rid ? document.getElementById('join-btn').click() : document.getElementById('create-btn').click();
+  }
+});
 
 document.getElementById('leave-btn').onclick = () => location.reload();
 document.getElementById('copy-room-btn').onclick = copyRoom;
@@ -473,116 +721,79 @@ function copyRoom() {
 }
 
 function initRoom(name) {
-  myName = name;
-  myId = randomId(10);
+  myName = name; myId = randomId(10);
   document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('chat-screen').style.display = 'block';
+  document.getElementById('app').style.display = 'flex';
   document.getElementById('room-val-display').textContent = roomId;
-  document.getElementById('copy-room-btn').style.display = 'block';
-  document.getElementById('leave-btn').style.display = 'block';
+  document.getElementById('copy-room-btn').style.display = 'flex';
+  document.getElementById('leave-btn').style.display = 'flex';
   setStatus('connecting');
+  // On mobile, start on peers view
+  showView('peers');
   connectWS();
 }
 
 // ══════════════════════════════════════════
-// WEBSOCKET SIGNALING
+// WEBSOCKET
 // ══════════════════════════════════════════
 function connectWS() {
   if (ws) { try { ws.close(); } catch(e){} }
-  ws = new WebSocket(signalingUrl);
-
+  ws = new WebSocket(SIGNALING_URL);
   ws.onopen = () => {
     document.getElementById('conn-banner').style.display = 'none';
     ws.send(JSON.stringify({ type: 'join', peerId: myId, roomId, name: myName }));
   };
-
   ws.onmessage = (e) => {
-    let msg;
-    try { msg = JSON.parse(e.data); } catch { return; }
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
     handleServerMsg(msg);
   };
-
   ws.onclose = () => {
     document.getElementById('conn-banner').style.display = 'block';
     setStatus('connecting');
     wsReconnectTimer = setTimeout(connectWS, 3000);
   };
-
-  ws.onerror = () => { ws.close(); };
+  ws.onerror = () => ws.close();
 }
 
 function wsSend(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
-  }
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
 // ══════════════════════════════════════════
-// SERVER MESSAGE HANDLER
+// SERVER MESSAGES
 // ══════════════════════════════════════════
 async function handleServerMsg(msg) {
   switch(msg.type) {
-
     case 'room-peers':
-      // Server sends list of existing peers — initiate WebRTC to each
       setStatus('connected');
       addSysMsg('You joined as "' + myName + '"');
-      if (msg.peers.length === 0) {
-        setStatus('connected');
-      }
-      for (const peerId of msg.peers) {
-        await createPeerConnection(peerId, true); // we are the initiator
-      }
+      for (const peerId of msg.peers) await createPeerConnection(peerId, true);
       break;
-
     case 'peer-joined':
-      // Another peer joined — they will initiate, we just wait
-      // But send our hello so they know our name
       wsSend({ type: 'hello', to: msg.peerId, name: myName });
       break;
-
     case 'hello':
-      // Peer told us their name before/during WebRTC setup
-      if (peers[msg.from]) {
-        peers[msg.from].name = msg.name;
-        updatePeerList();
-      } else {
-        // Create entry
-        await createPeerConnection(msg.from, false);
-        if (peers[msg.from]) peers[msg.from].name = msg.name;
-        updatePeerList();
-      }
+      if (peers[msg.from]) { peers[msg.from].name = msg.name; updatePeerList(); }
+      else { await createPeerConnection(msg.from, false); if(peers[msg.from]) peers[msg.from].name = msg.name; updatePeerList(); }
       wsSend({ type: 'hello-ack', to: msg.from, name: myName });
       break;
-
     case 'hello-ack':
-      if (peers[msg.from]) {
-        peers[msg.from].name = msg.name;
-        updatePeerList();
-      }
+      if (peers[msg.from]) { peers[msg.from].name = msg.name; updatePeerList(); }
       break;
-
     case 'offer':
       await handleOffer(msg.from, msg.sdp, msg.name);
       break;
-
     case 'answer':
-      if (peers[msg.from] && peers[msg.from].pc) {
-        await peers[msg.from].pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
-      }
+      if (peers[msg.from]?.pc) await peers[msg.from].pc.setRemoteDescription({ type:'answer', sdp:msg.sdp });
       break;
-
     case 'ice-candidate':
-      if (peers[msg.from] && peers[msg.from].pc && msg.candidate) {
+      if (peers[msg.from]?.pc && msg.candidate) {
         try { await peers[msg.from].pc.addIceCandidate(msg.candidate); } catch(e){}
       }
       break;
-
     case 'peer-left':
       removePeer(msg.peerId);
       break;
-
-    // Fallback: non-WebRTC message relayed via server (shouldn't happen often)
     case 'message':
       receiveMessage(msg);
       break;
@@ -590,185 +801,89 @@ async function handleServerMsg(msg) {
 }
 
 // ══════════════════════════════════════════
-// WEBRTC PEER CONNECTION
+// WEBRTC
 // ══════════════════════════════════════════
 async function createPeerConnection(peerId, isInitiator) {
-  if (peers[peerId]) return; // already exists
-
+  if (peers[peerId]) return;
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  peers[peerId] = { id:peerId, name:peerId.slice(0,6), pc, dc:null, dcOpen:false, unread:0, color:getColor(peerId), avatar:getAvatar(peerId) };
 
-  peers[peerId] = {
-    id: peerId,
-    name: peerId.slice(0,6),
-    pc,
-    dc: null,
-    dcOpen: false,
-    unread: 0,
-    color: getColor(peerId),
-    avatar: getAvatar(peerId),
-  };
-
-  // ICE candidates → forward to peer via signaling server
-  pc.onicecandidate = (e) => {
-    if (e.candidate) {
-      wsSend({ type: 'ice-candidate', to: peerId, candidate: e.candidate });
-    }
-  };
-
+  pc.onicecandidate = (e) => { if(e.candidate) wsSend({ type:'ice-candidate', to:peerId, candidate:e.candidate }); };
   pc.onconnectionstatechange = () => {
-    const state = pc.connectionState;
-    if (state === 'connected') {
-      setStatus('connected');
-    } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
-      removePeer(peerId);
-    }
+    const s = pc.connectionState;
+    if (s==='connected') setStatus('connected');
+    else if (['disconnected','failed','closed'].includes(s)) removePeer(peerId);
   };
 
   if (isInitiator) {
-    // Create data channel
-    const dc = pc.createDataChannel('codedrop', { ordered: true });
+    const dc = pc.createDataChannel('codedrop', { ordered:true });
     setupDataChannel(peerId, dc);
     peers[peerId].dc = dc;
-
-    // Create offer
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    wsSend({ type: 'offer', to: peerId, sdp: offer.sdp, name: myName });
+    wsSend({ type:'offer', to:peerId, sdp:offer.sdp, name:myName });
   } else {
-    // Wait for data channel from initiator
-    pc.ondatachannel = (e) => {
-      peers[peerId].dc = e.channel;
-      setupDataChannel(peerId, e.channel);
-    };
+    pc.ondatachannel = (e) => { peers[peerId].dc = e.channel; setupDataChannel(peerId, e.channel); };
   }
-
-  return pc;
 }
 
 async function handleOffer(peerId, sdp, senderName) {
-  if (!peers[peerId]) {
-    peers[peerId] = {
-      id: peerId,
-      name: senderName || peerId.slice(0,6),
-      pc: null, dc: null, dcOpen: false,
-      unread: 0,
-      color: getColor(peerId),
-      avatar: getAvatar(peerId),
-    };
-  }
-
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  if (!peers[peerId]) peers[peerId] = { id:peerId, name:senderName||peerId.slice(0,6), pc:null, dc:null, dcOpen:false, unread:0, color:getColor(peerId), avatar:getAvatar(peerId) };
+  const pc = new RTCPeerConnection({ iceServers:ICE_SERVERS });
   peers[peerId].pc = pc;
   if (senderName) peers[peerId].name = senderName;
 
-  pc.onicecandidate = (e) => {
-    if (e.candidate) wsSend({ type: 'ice-candidate', to: peerId, candidate: e.candidate });
-  };
-
+  pc.onicecandidate = (e) => { if(e.candidate) wsSend({ type:'ice-candidate', to:peerId, candidate:e.candidate }); };
   pc.onconnectionstatechange = () => {
-    const state = pc.connectionState;
-    if (state === 'connected') setStatus('connected');
-    else if (['disconnected','failed','closed'].includes(state)) removePeer(peerId);
+    const s = pc.connectionState;
+    if (s==='connected') setStatus('connected');
+    else if (['disconnected','failed','closed'].includes(s)) removePeer(peerId);
   };
+  pc.ondatachannel = (e) => { peers[peerId].dc = e.channel; setupDataChannel(peerId, e.channel); };
 
-  pc.ondatachannel = (e) => {
-    peers[peerId].dc = e.channel;
-    setupDataChannel(peerId, e.channel);
-  };
-
-  await pc.setRemoteDescription({ type: 'offer', sdp });
+  await pc.setRemoteDescription({ type:'offer', sdp });
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  wsSend({ type: 'answer', to: peerId, sdp: answer.sdp });
+  wsSend({ type:'answer', to:peerId, sdp:answer.sdp });
 }
 
 function setupDataChannel(peerId, dc) {
-  // Use chunked transfer for large payloads
   const chunkBuffer = {};
-
   dc.onopen = () => {
     peers[peerId].dcOpen = true;
-    addSysMsg((peers[peerId].name || peerId.slice(0,6)) + ' connected (P2P)');
-    updatePeerList();
-    updatePeerCount();
-    setStatus('connected');
-    // Exchange names
-    dcSend(peerId, { type: 'hello', name: myName });
+    addSysMsg((peers[peerId].name||peerId.slice(0,6)) + ' connected (P2P)');
+    updatePeerList(); updatePeerCount(); setStatus('connected');
+    dcSend(peerId, { type:'hello', name:myName });
   };
-
-  dc.onclose = () => {
-    if (peers[peerId]) {
-      peers[peerId].dcOpen = false;
-      removePeer(peerId);
-    }
-  };
-
-  dc.onerror = (e) => { console.warn('DC error', peerId, e); };
-
+  dc.onclose = () => { if(peers[peerId]) { peers[peerId].dcOpen=false; removePeer(peerId); } };
+  dc.onerror = () => {};
   dc.onmessage = (e) => {
-    let msg;
-    try { msg = JSON.parse(e.data); } catch { return; }
-
-    if (msg.type === 'hello') {
-      peers[peerId].name = msg.name;
-      updatePeerList();
-      return;
-    }
-
-    // Chunked file reassembly
-    if (msg.type === 'chunk-start') {
-      chunkBuffer[msg.transferId] = { meta: msg, parts: [], received: 0 };
-      return;
-    }
-    if (msg.type === 'chunk') {
-      const buf = chunkBuffer[msg.transferId];
-      if (buf) { buf.parts.push(msg.data); buf.received++; }
-      return;
-    }
-    if (msg.type === 'chunk-end') {
-      const buf = chunkBuffer[msg.transferId];
-      if (buf) {
-        const fileData = buf.parts.join('');
-        delete chunkBuffer[msg.transferId];
-        fileStore[buf.meta.fileDataId] = { name: buf.meta.filename, data: fileData };
-        receiveMessage({
-          from: peerId,
-          msgType: 'file',
-          filename: buf.meta.filename,
-          fileSize: buf.meta.fileSize,
-          fileDataId: buf.meta.fileDataId,
-          senderName: peers[peerId]?.name,
-          targetPeer: 'broadcast',
-        });
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type==='hello') { peers[peerId].name=msg.name; updatePeerList(); return; }
+    if (msg.type==='chunk-start') { chunkBuffer[msg.transferId]={meta:msg,parts:[],received:0}; return; }
+    if (msg.type==='chunk') { const b=chunkBuffer[msg.transferId]; if(b){b.parts.push(msg.data);b.received++;} return; }
+    if (msg.type==='chunk-end') {
+      const b=chunkBuffer[msg.transferId];
+      if (b) {
+        const fileData=b.parts.join(''); delete chunkBuffer[msg.transferId];
+        fileStore[b.meta.fileDataId]={name:b.meta.filename,data:fileData};
+        receiveMessage({ from:peerId, msgType:'file', filename:b.meta.filename, fileSize:b.meta.fileSize, fileDataId:b.meta.fileDataId, senderName:peers[peerId]?.name, targetPeer:'broadcast' });
       }
       return;
     }
-
-    // Regular message
-    if (msg.type === 'message') {
-      msg.from = peerId;
-      msg.senderName = peers[peerId]?.name || peerId.slice(0,6);
-      receiveMessage(msg);
-    }
+    if (msg.type==='message') { msg.from=peerId; msg.senderName=peers[peerId]?.name||peerId.slice(0,6); receiveMessage(msg); }
   };
 }
 
-// Send via DataChannel (direct P2P)
 function dcSend(peerId, data) {
-  const peer = peers[peerId];
-  if (peer && peer.dc && peer.dcOpen) {
-    try { peer.dc.send(JSON.stringify(data)); return true; } catch(e){}
-  }
+  const p = peers[peerId];
+  if (p && p.dc && p.dcOpen) { try { p.dc.send(JSON.stringify(data)); return true; } catch(e){} }
   return false;
 }
 
-// Send to all or specific peer
 function sendToPeer(peerId, data) {
-  if (peerId === 'broadcast') {
-    Object.keys(peers).forEach(id => dcSend(id, data));
-  } else {
-    dcSend(peerId, data);
-  }
+  if (peerId==='broadcast') Object.keys(peers).forEach(id => dcSend(id,data));
+  else dcSend(peerId,data);
 }
 
 // ══════════════════════════════════════════
@@ -776,30 +891,25 @@ function sendToPeer(peerId, data) {
 // ══════════════════════════════════════════
 function removePeer(id) {
   if (!peers[id]) return;
-  addSysMsg((peers[id].name || id.slice(0,6)) + ' disconnected');
+  addSysMsg((peers[id].name||id.slice(0,6)) + ' disconnected');
   try { peers[id].pc?.close(); } catch(e){}
   delete peers[id];
-  updatePeerList();
-  updatePeerCount();
-  if (Object.keys(peers).length === 0) setStatus('connected'); // still on server
+  updatePeerList(); updatePeerCount();
 }
 
 function updatePeerList() {
   const list = document.getElementById('peer-list');
   const peerArr = Object.values(peers).filter(p => p.dcOpen);
-
-  if (peerArr.length === 0) {
-    list.innerHTML = `<div style="padding:16px; font-size:11px; color:var(--text3); text-align:center;">
-      Waiting for peers...<br><span style="font-size:10px;">Share your Room ID</span></div>`;
+  if (peerArr.length===0) {
+    list.innerHTML = `<div style="padding:20px 16px;font-size:12px;color:var(--text3);text-align:center;line-height:1.8">
+      Waiting for peers...<br><span style="font-size:10px">Share your Room ID below</span></div>`;
     return;
   }
-
   list.innerHTML = '';
 
-  // Broadcast item
   const bEl = document.createElement('div');
-  bEl.className = 'peer-item' + (selectedPeer === 'broadcast' ? ' active' : '');
-  bEl.onclick = () => selectPeer('broadcast');
+  bEl.className = 'peer-item' + (selectedPeer==='broadcast'?' active':'');
+  bEl.onclick = () => { selectPeer('broadcast'); if(window.innerWidth<768) showView('chat'); };
   bEl.innerHTML = `
     <div class="peer-avatar" style="background:rgba(91,124,255,0.15);color:var(--accent)">📡</div>
     <div class="peer-info"><div class="peer-name">broadcast</div><div class="peer-sub">all peers</div></div>`;
@@ -807,22 +917,22 @@ function updatePeerList() {
 
   peerArr.forEach(p => {
     const el = document.createElement('div');
-    el.className = 'peer-item' + (selectedPeer === p.id ? ' active' : '');
-    el.onclick = () => selectPeer(p.id);
+    el.className = 'peer-item' + (selectedPeer===p.id?' active':'');
+    el.onclick = () => { selectPeer(p.id); if(window.innerWidth<768) showView('chat'); };
     el.innerHTML = `
       <div class="peer-avatar" style="background:${p.color}22;color:${p.color}">${p.avatar}</div>
       <div class="peer-info">
         <div class="peer-name">${escapeHtml(p.name)}</div>
         <div class="peer-sub">${p.id.toLowerCase().slice(0,6)} · p2p</div>
       </div>
-      ${p.unread ? `<div class="unread-badge">${p.unread}</div>` : ''}`;
+      ${p.unread?`<div class="unread-badge">${p.unread}</div>`:''}`;
     list.appendChild(el);
   });
 }
 
 function selectPeer(id) {
   selectedPeer = id;
-  if (id === 'broadcast') {
+  if (id==='broadcast') {
     document.getElementById('chat-target-name').textContent = 'broadcast';
     document.getElementById('chat-target-sub').textContent = 'all peers in room';
   } else if (peers[id]) {
@@ -834,16 +944,17 @@ function selectPeer(id) {
 }
 
 function updatePeerCount() {
-  const n = Object.values(peers).filter(p => p.dcOpen).length;
-  document.getElementById('peer-count-label').textContent = n ? n + ' peer' + (n>1?'s':'') + ' online' : '';
+  const n = Object.values(peers).filter(p=>p.dcOpen).length;
+  document.getElementById('peer-count-label').textContent = n ? n+' online' : '';
 }
 
 // ══════════════════════════════════════════
 // MESSAGES
 // ══════════════════════════════════════════
 function receiveMessage(msg) {
-  const fromActive = selectedPeer === msg.from || selectedPeer === 'broadcast';
-  if (!fromActive && peers[msg.from]) {
+  const inView = currentView === 'chat' || window.innerWidth >= 768;
+  if (!inView) notifyChatUnread();
+  if (peers[msg.from]) {
     peers[msg.from].unread = (peers[msg.from].unread||0) + 1;
     updatePeerList();
   }
@@ -856,19 +967,17 @@ function renderMessage(msg, isOwn) {
   if (empty) empty.remove();
 
   const el = document.createElement('div');
-  el.className = 'msg' + (isOwn ? ' own' : '');
-
+  el.className = 'msg' + (isOwn?' own':'');
   const peer = isOwn ? null : peers[msg.from];
-  const color = isOwn ? '#5b7cff' : (peer?.color || '#888');
-  const avatar = isOwn ? '👤' : (peer?.avatar || '?');
-  const name = isOwn ? myName : (peer?.name || msg.senderName || '?');
+  const color = isOwn ? '#5b7cff' : (peer?.color||'#888');
+  const avatar = isOwn ? '👤' : (peer?.avatar||'?');
+  const name = isOwn ? myName : (peer?.name||msg.senderName||'?');
 
   let contentHtml = '';
-
-  if (msg.msgType === 'text') {
+  if (msg.msgType==='text') {
     contentHtml = `<div class="msg-bubble">${escapeHtml(msg.content)}</div>`;
-  } else if (msg.msgType === 'code') {
-    const id = 'code_' + Math.random().toString(36).substr(2,8);
+  } else if (msg.msgType==='code') {
+    const id = 'code_'+Math.random().toString(36).substr(2,8);
     contentHtml = `<div class="msg-code-block">
       <div class="code-header">
         <span class="code-lang">${escapeHtml(msg.lang||'code')}</span>
@@ -880,8 +989,8 @@ function renderMessage(msg, isOwn) {
       </div>
       <div class="code-body"><pre id="${id}">${escapeHtml(msg.content)}</pre></div>
     </div>`;
-  } else if (msg.msgType === 'env') {
-    const id = 'env_' + Math.random().toString(36).substr(2,8);
+  } else if (msg.msgType==='env') {
+    const id = 'env_'+Math.random().toString(36).substr(2,8);
     contentHtml = `<div class="msg-code-block" style="border-color:rgba(255,95,95,0.2)">
       <div class="code-header" style="background:rgba(255,95,95,0.06)">
         <span class="code-lang" style="color:var(--red)">env</span>
@@ -893,7 +1002,7 @@ function renderMessage(msg, isOwn) {
       </div>
       <div class="code-body"><pre id="${id}">${escapeHtml(msg.content)}</pre></div>
     </div>`;
-  } else if (msg.msgType === 'file') {
+  } else if (msg.msgType==='file') {
     const icon = getFileIcon(msg.filename);
     contentHtml = `<div class="msg-file-block" onclick="downloadFile('${msg.fileDataId}')">
       <div class="file-icon">${icon}</div>
@@ -911,7 +1020,7 @@ function renderMessage(msg, isOwn) {
       <div class="msg-meta">
         <span class="msg-name">${escapeHtml(name)}</span>
         <span class="msg-time">${ts()}</span>
-        ${!isOwn && msg.targetPeer !== 'broadcast' ? '<span style="font-size:9px;color:var(--accent)">dm</span>' : ''}
+        ${!isOwn&&msg.targetPeer!=='broadcast'?'<span style="font-size:9px;color:var(--accent)">dm</span>':''}
       </div>
       ${contentHtml}
     </div>`;
@@ -924,14 +1033,14 @@ function renderMessage(msg, isOwn) {
 // SEND FUNCTIONS
 // ══════════════════════════════════════════
 function buildMsg(extra) {
-  return { type: 'message', from: myId, senderName: myName, targetPeer: selectedPeer, ...extra };
+  return { type:'message', from:myId, senderName:myName, targetPeer:selectedPeer, ...extra };
 }
 
 function sendText() {
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
   if (!text) return;
-  const msg = buildMsg({ msgType: 'text', content: text });
+  const msg = buildMsg({ msgType:'text', content:text });
   sendToPeer(selectedPeer, msg);
   renderMessage(msg, true);
   input.value = ''; input.style.height = 'auto';
@@ -940,100 +1049,68 @@ function sendText() {
 function sendCode() {
   const content = document.getElementById('code-editor').value.trim();
   if (!content) { showToast('Code is empty'); return; }
-  const msg = buildMsg({
-    msgType: 'code', content,
-    filename: document.getElementById('code-filename').value.trim() || 'snippet',
-    lang: document.getElementById('code-lang').value
-  });
+  const msg = buildMsg({ msgType:'code', content, filename:document.getElementById('code-filename').value.trim()||'snippet', lang:document.getElementById('code-lang').value });
   sendToPeer(selectedPeer, msg);
   renderMessage(msg, true);
   document.getElementById('code-editor').value = '';
   showToast('Snippet sent P2P');
-  setMode('text');
+  if (window.innerWidth < 768) showView('chat');
 }
 
 function sendEnv() {
   const content = document.getElementById('env-editor').value.trim();
   if (!content) { showToast('.env is empty'); return; }
-  const msg = buildMsg({
-    msgType: 'env', content,
-    filename: document.getElementById('env-filename').value.trim() || '.env'
-  });
+  const msg = buildMsg({ msgType:'env', content, filename:document.getElementById('env-filename').value.trim()||'.env' });
   sendToPeer(selectedPeer, msg);
   renderMessage(msg, true);
   document.getElementById('env-editor').value = '';
   showToast('.env sent P2P');
+  if (window.innerWidth < 768) showView('chat');
 }
 
-// ── FILE TRANSFER (chunked, P2P) ──
-const CHUNK_SIZE = 16384; // 16KB chunks through DataChannel
-
+const CHUNK_SIZE = 16384;
 function sendFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const dataUrl = e.target.result;
-    const fileDataId = 'file_' + Math.random().toString(36).substr(2,12);
-    const transferId = 'xfr_' + Math.random().toString(36).substr(2,8);
+    const fileDataId = 'file_'+Math.random().toString(36).substr(2,12);
+    const transferId = 'xfr_'+Math.random().toString(36).substr(2,8);
+    fileStore[fileDataId] = { name:file.name, data:dataUrl };
 
-    // Store locally for own download
-    fileStore[fileDataId] = { name: file.name, data: dataUrl };
-
-    // Split into chunks
     const totalLen = dataUrl.length;
-    const totalChunks = Math.ceil(totalLen / CHUNK_SIZE);
+    const totalChunks = Math.ceil(totalLen/CHUNK_SIZE);
 
     const sendChunked = (peerId) => {
       const peer = peers[peerId];
-      if (!peer || !peer.dcOpen) return;
-
-      // Start marker
-      dcSend(peerId, {
-        type: 'chunk-start', transferId, fileDataId,
-        filename: file.name, fileSize: file.size, totalChunks
-      });
-
-      // Send chunks with small delay to avoid overflow
-      let i = 0;
+      if (!peer||!peer.dcOpen) return;
+      dcSend(peerId, { type:'chunk-start', transferId, fileDataId, filename:file.name, fileSize:file.size, totalChunks });
+      let i=0;
       function sendNext() {
-        if (i >= totalChunks) {
-          dcSend(peerId, { type: 'chunk-end', transferId });
-          return;
-        }
-        const chunk = dataUrl.slice(i * CHUNK_SIZE, (i+1) * CHUNK_SIZE);
-        dcSend(peerId, { type: 'chunk', transferId, data: chunk });
+        if (i>=totalChunks) { dcSend(peerId,{type:'chunk-end',transferId}); return; }
+        dcSend(peerId,{type:'chunk',transferId,data:dataUrl.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE)});
         i++;
-        // slight delay for large files to not overflow DC buffer
-        if (i % 50 === 0) { setTimeout(sendNext, 10); } else { sendNext(); }
+        if (i%50===0) setTimeout(sendNext,10); else sendNext();
       }
       sendNext();
     };
 
-    if (selectedPeer === 'broadcast') {
-      Object.keys(peers).forEach(sendChunked);
-    } else {
-      sendChunked(selectedPeer);
-    }
+    if (selectedPeer==='broadcast') Object.keys(peers).forEach(sendChunked);
+    else sendChunked(selectedPeer);
 
-    // Show own message immediately
-    renderMessage({
-      from: myId, msgType: 'file',
-      filename: file.name, fileSize: file.size, fileDataId, targetPeer: selectedPeer
-    }, true);
-
-    showToast('Sending: ' + file.name);
+    renderMessage({ from:myId, msgType:'file', filename:file.name, fileSize:file.size, fileDataId, targetPeer:selectedPeer }, true);
+    showToast('Sending: '+file.name);
+    if (window.innerWidth < 768) showView('chat');
   };
   reader.readAsDataURL(file);
 }
 
-// ── FILE DOWNLOAD ──
 function downloadFile(fileDataId) {
   const f = fileStore[fileDataId];
   if (!f) { showToast('File not available'); return; }
   const a = document.createElement('a');
-  a.href = f.data; a.download = f.name; a.click();
+  a.href=f.data; a.download=f.name; a.click();
 }
 
-// ── CODE ACTIONS ──
 function copyCode(id) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1044,36 +1121,34 @@ function copyCode(id) {
 function downloadCode(id, filename) {
   const el = document.getElementById(id);
   if (!el) return;
-  const blob = new Blob([el.textContent], { type: 'text/plain' });
+  const blob = new Blob([el.textContent],{type:'text/plain'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
+  a.href=url; a.download=filename; a.click();
   URL.revokeObjectURL(url);
 }
 
 // ══════════════════════════════════════════
-// UI HELPERS
+// UI
 // ══════════════════════════════════════════
 function setMode(mode) {
   inputMode = mode;
-  document.getElementById('input-text-mode').style.display = mode==='text' ? 'flex' : 'none';
-  document.getElementById('input-code-mode').style.display = mode==='code' ? 'flex' : 'none';
-  document.getElementById('input-file-mode').style.display = mode==='file' ? 'block' : 'none';
-  ['text','code','file'].forEach(m => {
-    document.getElementById('mode-'+m).classList.toggle('active', m===mode);
-  });
-  if (mode === 'code') switchPanel('code');
+  document.getElementById('input-text-mode').style.display = mode==='text'?'flex':'none';
+  document.getElementById('input-code-mode').style.display = mode==='code'?'block':'none';
+  document.getElementById('input-file-mode').style.display = mode==='file'?'block':'none';
+  ['text','code','file'].forEach(m => document.getElementById('mode-'+m).classList.toggle('active', m===mode));
+  if (mode==='code' && window.innerWidth<768) showView('code');
 }
 
-function switchPanel(tab) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+function switchCodePanel(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.panel-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('panel-'+tab).classList.add('active');
   document.querySelectorAll('.panel-tab')[tab==='code'?0:1].classList.add('active');
 }
 
 function setStatus(s) {
-  document.getElementById('status-dot').className = 'status-dot ' + s;
+  document.getElementById('status-dot').className = 'status-dot '+s;
   document.getElementById('status-text').textContent = s;
 }
 
@@ -1082,71 +1157,70 @@ function addSysMsg(text) {
   const empty = c.querySelector('.empty-state');
   if (empty) empty.remove();
   const el = document.createElement('div');
-  el.className = 'sys-msg'; el.textContent = text;
-  c.appendChild(el); c.scrollTop = c.scrollHeight;
+  el.className='sys-msg'; el.textContent=text;
+  c.appendChild(el); c.scrollTop=c.scrollHeight;
 }
 
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
 }
 
 function escapeHtml(s) {
-  if (!s) return '';
+  if(!s)return'';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function getFileIcon(name) {
-  const ext = (name.split('.').pop()||'').toLowerCase();
-  const map = {
-    js:'📜',ts:'📜',py:'🐍',go:'🐹',rs:'🦀',java:'☕',
-    html:'🌐',css:'🎨',json:'📋',yml:'📋',yaml:'📋',
-    env:'🔐',zip:'📦',gz:'📦',tar:'📦',rar:'📦',
-    png:'🖼',jpg:'🖼',jpeg:'🖼',gif:'🖼',svg:'🖼',webp:'🖼',
-    pdf:'📄',md:'📝',txt:'📝',sh:'⚙',dockerfile:'🐳',
-    sql:'🗄',csv:'📊',
-  };
-  return map[ext] || (name.startsWith('.')? '🔐' : '📁');
+  const ext=(name.split('.').pop()||'').toLowerCase();
+  const map={js:'📜',ts:'📜',py:'🐍',go:'🐹',rs:'🦀',java:'☕',html:'🌐',css:'🎨',json:'📋',yml:'📋',yaml:'📋',env:'🔐',zip:'📦',gz:'📦',tar:'📦',rar:'📦',png:'🖼',jpg:'🖼',jpeg:'🖼',gif:'🖼',svg:'🖼',webp:'🖼',pdf:'📄',md:'📝',txt:'📝',sh:'⚙',dockerfile:'🐳',sql:'🗄',csv:'📊'};
+  return map[ext]||(name.startsWith('.')?'🔐':'📁');
 }
 
 // ══════════════════════════════════════════
-// EVENT LISTENERS
+// EVENTS
 // ══════════════════════════════════════════
 document.getElementById('msg-input').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
+  if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendText(); }
 });
 document.getElementById('msg-input').addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+  this.style.height='auto';
+  this.style.height=Math.min(this.scrollHeight,100)+'px';
 });
 
 document.getElementById('file-input').onchange = (e) => {
-  [...e.target.files].forEach(sendFile); e.target.value = '';
+  [...e.target.files].forEach(sendFile); e.target.value='';
 };
 
 const dropZone = document.getElementById('drop-zone');
-dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', (e) => {
-  e.preventDefault(); dropZone.classList.remove('drag-over');
-  [...e.dataTransfer.files].forEach(sendFile);
-});
+['dragover','dragenter'].forEach(ev => dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); }));
+['dragleave','dragend'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over')));
+dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); [...e.dataTransfer.files].forEach(sendFile); });
 
 window.addEventListener('paste', (e) => {
   if (['msg-input','code-editor'].includes(document.activeElement.id)) return;
-  const items = e.clipboardData?.items;
-  if (!items) return;
-  for (const item of items) {
-    if (item.kind === 'file') { const f = item.getAsFile(); if(f) sendFile(f); }
-  }
+  const items = e.clipboardData?.items; if(!items) return;
+  for (const item of items) { if(item.kind==='file'){const f=item.getAsFile();if(f)sendFile(f);} }
 });
 
 window.addEventListener('beforeunload', () => {
-  if (ws) { try { ws.send(JSON.stringify({ type: 'bye' })); ws.close(); } catch(e){} }
+  if (ws) { try { ws.send(JSON.stringify({type:'bye'})); ws.close(); } catch(e){} }
 });
 
-// Init
+// Handle keyboard on mobile (push content up)
+let initialVH = window.innerHeight;
+window.addEventListener('resize', () => {
+  const newVH = window.innerHeight;
+  if (newVH < initialVH - 100) {
+    // Keyboard opened — scroll messages to bottom
+    setTimeout(() => {
+      const m = document.getElementById('messages');
+      if (m) m.scrollTop = m.scrollHeight;
+    }, 100);
+  }
+});
+
 setMode('text');
 </script>
 </body>
