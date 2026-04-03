@@ -448,7 +448,7 @@ function formatSize(b) { if(b<1024)return b+'B'; if(b<1048576)return(b/1024).toF
 document.getElementById('create-btn').onclick = () => {
   const name = document.getElementById('setup-name').value.trim();
   if (!name) { showToast('Enter your name'); return; }
-  signalingUrl = 'http://localhost:4040';
+  signalingUrl = 'https://codedrop-tlt0.onrender.com';
   roomId = randomId(6);
   initRoom(name);
 };
@@ -458,7 +458,7 @@ document.getElementById('join-btn').onclick = () => {
   const rid = document.getElementById('setup-room').value.trim();
   if (!name) { showToast('Enter your name'); return; }
   if (!rid) { showToast('Enter a room ID'); return; }
-  signalingUrl = 'http://localhost:4040';
+  signalingUrl = 'https://codedrop-tlt0.onrender.com';
   roomId = rid.toUpperCase();
   initRoom(name);
 };
