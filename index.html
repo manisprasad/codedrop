@@ -6,6 +6,7 @@
 <title>CodeDrop — Ephemeral Code Share</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="lib/pdf.min.js"></script>
 <style>
   :root {
     --bg: #0d0f14;
@@ -296,6 +297,24 @@
   .code-body { padding: 12px 14px; overflow-x: auto; max-height: 240px; overflow-y: auto; }
   .code-body pre { font-family: var(--mono); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre; }
 
+  /* ── SENSITIVE BLUR (text) ── */
+  .sensitive-blur .msg-bubble { filter: blur(6px); transition: filter 0.25s; user-select: none; }
+  .sensitive-blur:hover .msg-bubble { filter: blur(0); user-select: text; }
+
+  /* ── ENV BLUR ── */
+  .env-blur { position: relative; }
+  .env-blur .code-body pre { filter: blur(6px); transition: filter 0.25s; user-select: none; }
+  .env-blur .code-body:hover pre { filter: blur(0); user-select: text; }
+  .env-blur-hint {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 4; pointer-events: none; font-size: 11px;
+    color: var(--red); background: rgba(0,0,0,0.75); padding: 8px 16px;
+    border-radius: 6px; white-space: nowrap; opacity: 1;
+    transition: opacity 0.25s;
+  }
+  .msg-code-block.env-blur { overflow: visible; }
+  .env-blur .code-body:hover ~ .env-blur-hint { opacity: 0; }
+
   /* File bubble */
   .msg-file-block {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
@@ -362,6 +381,14 @@
   }
   #send-btn:active { background: var(--accent2); transform: scale(0.95); }
 
+  .sensitive-btn {
+    background: transparent; border: 1px solid var(--border2); color: var(--text3); font-size: 18px;
+    width: 44px; height: 44px; border-radius: 10px; cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .sensitive-btn:hover { border-color: var(--text2); color: var(--text2); }
+  .sensitive-btn.active { background: rgba(255,95,95,0.12); border-color: var(--red); color: var(--red); }
+
   /* File drop zone */
   .drop-zone {
     border: 1.5px dashed var(--border2); border-radius: 12px; padding: 24px 16px;
@@ -390,40 +417,6 @@
   @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
   .drop-overlay-text { font-size: 20px; font-weight: 600; color: var(--text); }
   .drop-overlay-sub { font-size: 14px; color: var(--text2); }
-
-  /* ── CODE VIEW ── */
-  #view-code { background: var(--surface); }
-  .panel-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .panel-tab {
-    flex: 1; padding: 12px 8px; text-align: center; font-size: 12px; color: var(--text3);
-    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
-  }
-  .panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-  .panel-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 12px; gap: 10px; }
-  .panel-field { display: flex; flex-direction: column; gap: 5px; }
-  .panel-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
-  .panel-input {
-    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-    font-family: var(--mono); font-size: 13px; padding: 9px 12px; border-radius: 8px;
-    outline: none; transition: border-color 0.2s; width: 100%; -webkit-appearance: none;
-  }
-  .panel-input:focus { border-color: var(--accent); }
-
-  #code-editor {
-    flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    font-family: var(--mono); font-size: 13px; padding: 12px; border-radius: 10px;
-    outline: none; resize: none; line-height: 1.6; min-height: 0; -webkit-appearance: none;
-  }
-  #code-editor:focus { border-color: var(--accent); }
-
-  .tab-panel { display: none; flex: 1; flex-direction: column; gap: 10px; overflow: hidden; }
-  .tab-panel.active { display: flex; }
-
-  .broadcast-note {
-    font-size: 11px; color: var(--text3); padding: 7px 10px;
-    background: rgba(91,124,255,0.05); border: 1px solid rgba(91,124,255,0.15); border-radius: 8px;
-  }
 
   /* ── BOTTOM NAV ── */
   #bottom-nav {
@@ -467,6 +460,15 @@
   .empty-title { font-family: var(--sans); font-weight: 700; font-size: 16px; color: var(--text2); }
   .empty-sub { font-size: 12px; line-height: 1.6; max-width: 280px; }
 
+  /* ── PDF PREVIEW ── */
+  .msg-image-preview.pdf-preview canvas {
+    width: 100%; height: auto; display: block; cursor: pointer;
+    max-height: 320px; object-fit: contain;
+  }
+  .pdf-loading {
+    padding: 24px; color: var(--text3); font-size: 12px; text-align: center;
+  }
+
   /* ── IMAGE PREVIEW IN CHAT ── */
   .msg-image-block {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
@@ -495,37 +497,114 @@
   }
   .img-dl-btn:hover, .img-dl-btn:active { background: rgba(91,124,255,0.1); border-color: var(--accent); }
 
+  /* Video preview in chat */
+  .msg-image-preview.video-preview { position: relative; }
+  .msg-image-preview.video-preview video {
+    width: 100%; height: auto; display: block; object-fit: contain;
+    max-height: 320px; background: #000;
+  }
+  .video-play-icon {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 48px; color: rgba(255,255,255,0.9); cursor: pointer;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.6); pointer-events: none;
+    background: rgba(0,0,0,0.1); transition: background 0.2s;
+  }
+  .msg-image-preview.video-preview:hover .video-play-icon { background: rgba(0,0,0,0.05); }
+
+  /* File action buttons (view/dl for PDF/text/log) */
+  .file-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+  .file-action-btn {
+    background: var(--surface2); border: 1px solid var(--border2); color: var(--text2);
+    font-family: var(--mono); font-size: 9px; padding: 4px 8px; border-radius: 5px;
+    cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .file-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .file-action-btn.dl:hover { border-color: var(--accent); color: var(--accent); }
+  .file-action-btn.pdf { color: var(--red); }
+  .file-action-btn.pdf:hover { border-color: var(--red); color: var(--red); }
+  .file-action-btn.text { color: var(--green); }
+  .file-action-btn.text:hover { border-color: var(--green); color: var(--green); }
+
   /* Image lightbox modal */
   #image-lightbox {
     position: fixed; inset: 0; z-index: 1000;
     background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
-    display: none; align-items: center; justify-content: center;
-    padding: 20px; cursor: pointer;
+    display: none; flex-direction: column; align-items: center;
+    padding: 0; user-select: none;
   }
   #image-lightbox.show { display: flex; }
-  .lightbox-content {
-    max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column;
-    align-items: center; gap: 12px; cursor: default;
+  .lightbox-top-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 12px 60px; min-height: 48px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 100%);
   }
-  .lightbox-content img {
-    max-width: 100%; max-height: 75vh; object-fit: contain;
+  .lightbox-filename { font-size: 12px; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lightbox-zoom-level { font-size: 11px; color: rgba(255,255,255,0.5); font-family: var(--mono); }
+  .lightbox-body {
+    flex: 1; width: 100%; overflow: hidden; cursor: grab;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .lightbox-body.dragging { cursor: grabbing; }
+  .lightbox-content-wrap {
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease;
+    transform-origin: center center;
+    will-change: transform;
+    max-width: 100%; max-height: 100%;
+  }
+  .lightbox-content-wrap img {
+    max-width: 90vw; max-height: calc(85vh - 100px); object-fit: contain;
     border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    pointer-events: none;
   }
-  .lightbox-actions { display: flex; gap: 10px; }
+  .lightbox-content-wrap.zoomed img {
+    max-width: none; max-height: none;
+    border-radius: 4px;
+  }
+  .lightbox-content-wrap video {
+    max-width: 90vw; max-height: calc(85vh - 100px); border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5); background: #000;
+  }
+  .lightbox-content-wrap embed {
+    width: 85vw; height: calc(85vh - 100px); border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5); background: #fff;
+  }
+  .lightbox-text-wrap {
+    max-width: 85vw; max-height: calc(85vh - 100px); overflow: auto;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px; box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  }
+  .lightbox-text-wrap pre {
+    font-family: var(--mono); font-size: 13px; line-height: 1.6;
+    color: var(--text); white-space: pre-wrap; word-break: break-all;
+    margin: 0;
+  }
+  .lightbox-actions {
+    display: flex; gap: 8px; align-items: center;
+    padding: 12px 20px;
+    padding-bottom: calc(12px + var(--safe-bottom));
+    background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, transparent 100%);
+    width: 100%; justify-content: center;
+  }
   .lightbox-btn {
     background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
-    color: #fff; font-family: var(--mono); font-size: 12px; padding: 8px 18px;
+    color: #fff; font-family: var(--mono); font-size: 16px; padding: 8px 18px;
     border-radius: 8px; cursor: pointer; transition: all 0.15s;
+    min-width: 40px; text-align: center;
   }
   .lightbox-btn:hover { background: rgba(255,255,255,0.2); }
+  .lightbox-btn:active { transform: scale(0.95); }
   .lightbox-close {
-    position: absolute; top: 16px; right: 16px;
-    background: rgba(255,255,255,0.1); border: none; color: #fff;
-    font-size: 24px; width: 40px; height: 40px; border-radius: 50%;
+    position: absolute; top: 12px; right: 12px; z-index: 20;
+    background: rgba(0,0,0,0.4); border: none; color: #fff;
+    font-size: 22px; width: 36px; height: 36px; border-radius: 50%;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     transition: background 0.15s;
   }
   .lightbox-close:hover { background: rgba(255,255,255,0.2); }
+  .lightbox-actions.hide-zoom .lightbox-zoom-btn { display: none; }
 
   /* ── TOAST ── */
   #toast {
@@ -552,12 +631,11 @@
     .view { position: static; transform: none !important; transition: none; }
     .desktop-layout {
       display: grid;
-      grid-template-columns: 220px 1fr 300px;
+      grid-template-columns: 240px 1fr;
       flex: 1; overflow: hidden;
     }
     #view-peers { border-right: 1px solid var(--border); }
     #view-chat { background: var(--bg); }
-    #view-code { border-left: 1px solid var(--border); }
     #bottom-nav { display: none !important; }
     .chat-sub-header { display: flex; }
     .room-box { padding-bottom: 14px; }
@@ -565,7 +643,7 @@
   }
 
   @media (min-width: 1024px) {
-    .desktop-layout { grid-template-columns: 240px 1fr 320px; }
+    .desktop-layout { grid-template-columns: 260px 1fr; }
   }
 
   /* Mobile specifics */
@@ -664,17 +742,12 @@
       <div class="input-bar">
         <div class="input-tools">
           <button class="tool-btn active" id="mode-text" onclick="setMode('text')">💬 text</button>
-          <button class="tool-btn" id="mode-code" onclick="setMode('code')">{} snippet</button>
           <button class="tool-btn" id="mode-file" onclick="setMode('file')">📎 file</button>
         </div>
         <div id="input-text-mode" class="input-row">
           <textarea id="msg-input" placeholder="type a message..." rows="1"></textarea>
+          <button class="sensitive-btn" id="sensitive-btn" title="Toggle sensitive (blurred)">👁️</button>
           <button id="send-btn" onclick="sendText()">↑</button>
-        </div>
-        <div id="input-code-mode" style="display:none">
-          <div style="font-size:11px;color:var(--text3);padding:8px 4px">
-            Go to the <strong style="color:var(--accent)">Code</strong> tab →
-          </div>
         </div>
         <div id="input-file-mode" style="display:none">
           <label class="drop-zone" for="file-input" id="drop-zone">
@@ -687,52 +760,7 @@
       </div>
     </div>
 
-    <!-- CODE VIEW -->
-    <div class="view" id="view-code">
-      <div class="panel-tabs">
-        <div class="panel-tab active" onclick="switchCodePanel('code')">snippet</div>
-        <div class="panel-tab" onclick="switchCodePanel('env')">.env</div>
-      </div>
 
-      <div class="tab-panel active" id="panel-code">
-        <div class="panel-body">
-          <div style="display:flex;gap:8px">
-            <div class="panel-field" style="flex:1">
-              <label class="panel-label">filename</label>
-              <input type="text" class="panel-input" id="code-filename" placeholder="index.js" />
-            </div>
-            <div class="panel-field" style="width:88px">
-              <label class="panel-label">lang</label>
-              <select class="panel-input" id="code-lang" style="background:var(--surface2)">
-                <option>js</option><option>ts</option><option>py</option><option>go</option>
-                <option>rust</option><option>java</option><option>cpp</option><option>css</option>
-                <option>html</option><option>sql</option><option>sh</option><option>json</option>
-                <option>yaml</option><option>toml</option><option>text</option>
-              </select>
-            </div>
-          </div>
-          <textarea id="code-editor" placeholder="// paste or type code here..."></textarea>
-          <div class="broadcast-note">Sent P2P via WebRTC</div>
-          <button class="btn primary" onclick="sendCode()" style="width:100%;padding:12px">send snippet ↑</button>
-        </div>
-      </div>
-
-      <div class="tab-panel" id="panel-env">
-        <div class="panel-body">
-          <div class="panel-field">
-            <label class="panel-label">filename</label>
-            <input type="text" class="panel-input" id="env-filename" placeholder=".env.production" />
-          </div>
-          <textarea id="env-editor" class="panel-input"
-            style="flex:1;min-height:0;resize:none;line-height:1.6;padding:10px 12px"
-            placeholder="DATABASE_URL=postgres://...&#10;API_KEY=sk-...&#10;SECRET=..."></textarea>
-          <div class="broadcast-note" style="color:var(--red);border-color:rgba(255,95,95,0.2);background:rgba(255,95,95,0.04)">
-            ⚠ sent P2P — cleared on refresh
-          </div>
-          <button class="btn primary" onclick="sendEnv()" style="width:100%;padding:12px">send .env ↑</button>
-        </div>
-      </div>
-    </div>
 
   </div><!-- end desktop-layout -->
 
@@ -747,10 +775,6 @@
       <span>Chat</span>
       <span class="nav-badge" id="chat-badge">0</span>
     </button>
-    <button class="nav-btn" id="nav-code" onclick="showView('code')">
-      <span class="nav-icon">{}</span>
-      <span>Code</span>
-    </button>
   </nav>
 
 </div><!-- end app -->
@@ -764,13 +788,25 @@
   </div>
 </div>
 
-<div id="image-lightbox" onclick="closeImageLightbox()">
-  <button class="lightbox-close">&times;</button>
-  <div class="lightbox-content" onclick="event.stopPropagation()">
-    <img id="lightbox-img" src="" alt="" />
-    <div class="lightbox-actions">
-      <button class="lightbox-btn" id="lightbox-dl-btn">⬇ download</button>
+<div id="image-lightbox">
+  <button class="lightbox-close" onclick="closeImageLightbox()">&times;</button>
+  <div class="lightbox-top-bar">
+    <span class="lightbox-filename" id="lightbox-filename"></span>
+    <span class="lightbox-zoom-level" id="lightbox-zoom-level">100%</span>
+  </div>
+  <div class="lightbox-body" id="lightbox-body">
+    <div class="lightbox-content-wrap" id="lightbox-content-wrap">
+      <img id="lightbox-img" src="" alt="" draggable="false" />
+      <video id="lightbox-video" controls></video>
+      <embed id="lightbox-embed" type="application/pdf" />
+      <div class="lightbox-text-wrap"><pre id="lightbox-text"></pre></div>
     </div>
+  </div>
+  <div class="lightbox-actions" id="lightbox-actions">
+    <button class="lightbox-btn lightbox-zoom-btn" id="lightbox-zoom-out" title="Zoom out">−</button>
+    <button class="lightbox-btn lightbox-zoom-btn" id="lightbox-zoom-reset" title="Reset zoom">⟲</button>
+    <button class="lightbox-btn lightbox-zoom-btn" id="lightbox-zoom-in" title="Zoom in">+</button>
+    <button class="lightbox-btn" id="lightbox-dl-btn">⬇ download</button>
   </div>
 </div>
 
@@ -811,6 +847,7 @@ let wsGeneration = 0;              // incremented on each new WS to stale-guard 
 let peers = {};
 let selectedPeer = 'broadcast';
 let inputMode    = 'text';
+let sensitiveMode = false;
 let currentView  = 'peers';       // mobile active view
 let unreadChat   = 0;
 const fileStore  = {};
@@ -834,7 +871,7 @@ function formatSize(b) { if(b<1024) return b+'B'; if(b<1048576) return (b/1024).
 function showView(view) {
   if (window.innerWidth >= 768) return; // desktop: all panels visible simultaneously
   currentView = view;
-  ['peers', 'chat', 'code'].forEach(v => {
+  ['peers', 'chat'].forEach(v => {
     document.getElementById('view-' + v).classList.toggle('active', v === view);
     const nb = document.getElementById('nav-' + v);
     if (nb) nb.classList.toggle('active', v === view);
@@ -1452,6 +1489,14 @@ function renderMessage(msg, isOwn) {
         <button class="msg-copy-btn" onclick="copyMsgText('${msgId}', this)" title="Copy message">copy</button>
       </div>`;
 
+  } else if (msg.msgType === 'sensitive') {
+    const msgId = 'msg_' + Math.random().toString(36).substr(2, 8);
+    contentHtml = `
+      <div class="msg-bubble-wrap sensitive-blur">
+        <div class="msg-bubble" id="${msgId}">${escapeHtml(msg.content)}</div>
+        <button class="msg-copy-btn" onclick="copyMsgText('${msgId}', this)" title="Copy message">copy</button>
+      </div>`;
+
   } else if (msg.msgType === 'code') {
     const id = 'code_' + Math.random().toString(36).substr(2, 8);
     contentHtml = `<div class="msg-code-block">
@@ -1468,7 +1513,8 @@ function renderMessage(msg, isOwn) {
 
   } else if (msg.msgType === 'env') {
     const id = 'env_' + Math.random().toString(36).substr(2, 8);
-    contentHtml = `<div class="msg-code-block" style="border-color:rgba(255,95,95,0.2)">
+    const blurCls = 'env-blur';
+    contentHtml = `<div class="msg-code-block ${blurCls}" style="border-color:rgba(255,95,95,0.2)">
       <div class="code-header" style="background:rgba(255,95,95,0.06)">
         <span class="code-lang" style="color:var(--red)">env</span>
         <span class="code-filename">${escapeHtml(msg.filename || '.env')}</span>
@@ -1477,11 +1523,14 @@ function renderMessage(msg, isOwn) {
           <button class="code-btn" onclick="downloadCode('${id}','${escapeHtml(msg.filename || '.env')}')">dl</button>
         </div>
       </div>
-      <div class="code-body"><pre id="${id}">${escapeHtml(msg.content)}</pre></div>
+      <div class="code-body"><pre id="${id}">${escapeHtml(msg.content)}</pre></div>${!isOwn ? '<div class="env-blur-hint">hover to reveal · copy to share</div>' : ''}
     </div>`;
 
   } else if (msg.msgType === 'file') {
     const isImage = msg.fileDataId && isImageFile(msg.filename);
+    const isVideo = msg.fileDataId && isVideoFile(msg.filename);
+    const isPdf = msg.fileDataId && isPDFFile(msg.filename);
+    const isViewable = msg.fileDataId && isViewableFile(msg.filename);
     if (isImage) {
       const f = fileStore[msg.fileDataId];
       const dataUrl = f ? f.data : '';
@@ -1492,6 +1541,46 @@ function renderMessage(msg, isOwn) {
         <div class="msg-image-footer">
           <span>${escapeHtml(msg.filename)} · ${formatSize(msg.fileSize)}</span>
           <button class="img-dl-btn" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">⬇ download</button>
+        </div>
+      </div>`;
+    } else if (isVideo) {
+      const f = fileStore[msg.fileDataId];
+      const dataUrl = f ? f.data : '';
+      contentHtml = `<div class="msg-image-block">
+        <div class="msg-image-preview video-preview">
+          <video src="${escapeHtml(dataUrl)}" muted autoplay loop playsinline
+            onclick="openImageLightbox('${msg.fileDataId}')"></video>
+          <div class="video-play-icon" onclick="openImageLightbox('${msg.fileDataId}')">▶</div>
+        </div>
+        <div class="msg-image-footer">
+          <span>${escapeHtml(msg.filename)} · ${formatSize(msg.fileSize)}</span>
+          <button class="img-dl-btn" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">⬇ download</button>
+        </div>
+      </div>`;
+    } else if (isPdf) {
+      const previewId = 'pdf_' + Math.random().toString(36).substr(2, 8);
+      contentHtml = `<div class="msg-image-block">
+        <div class="msg-image-preview pdf-preview" id="${previewId}">
+          <div class="pdf-loading">Rendering PDF preview...</div>
+        </div>
+        <div class="msg-image-footer">
+          <span>${escapeHtml(msg.filename)} · ${formatSize(msg.fileSize)}</span>
+          <button class="img-dl-btn" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">⬇ download</button>
+        </div>
+      </div>`;
+      setTimeout(() => renderPDFPreview(msg.fileDataId, previewId), 50);
+
+    } else if (isViewable) {
+      const icon = getFileIcon(msg.filename);
+      contentHtml = `<div class="msg-file-block" onclick="openImageLightbox('${msg.fileDataId}')">
+        <div class="file-icon">${icon}</div>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(msg.filename)}</div>
+          <div class="file-size">${formatSize(msg.fileSize)}</div>
+        </div>
+        <div class="file-actions">
+          <button class="file-action-btn text" onclick="event.stopPropagation(); openImageLightbox('${msg.fileDataId}')">text</button>
+          <button class="file-action-btn dl" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">dl</button>
         </div>
       </div>`;
     } else {
@@ -1529,47 +1618,46 @@ function buildMsg(extra) {
   return { type: 'message', from: myId, senderName: myName, targetPeer: selectedPeer, ...extra };
 }
 
+function detectEnv(text) {
+  const lines = text.split('\n');
+  let score = 0;
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const stripped = t.replace(/^export\s+/, '');
+    if (/^[A-Z][A-Z0-9_]+=/.test(stripped)) score += 2;
+    else if (/^[a-zA-Z_][a-zA-Z0-9_]*=/.test(stripped) && stripped.includes('=')) score += 1;
+  }
+  return score >= 2;
+}
+
 function sendText() {
   const input = document.getElementById('msg-input');
   const text  = input.value.trim();
   if (!text) return;
-  const msg = buildMsg({ msgType: 'text', content: text });
+  let msg;
+  if (sensitiveMode) {
+    if (detectEnv(text)) {
+      msg = buildMsg({ msgType: 'env', content: text, filename: '.env' });
+    } else {
+      msg = buildMsg({ msgType: 'sensitive', content: text });
+    }
+  } else if (detectEnv(text)) {
+    msg = buildMsg({ msgType: 'env', content: text, filename: '.env' });
+  } else {
+    const lang = detectLang(text);
+    if (lang) {
+      msg = buildMsg({ msgType: 'code', content: text, filename: 'snippet.' + lang, lang });
+    } else {
+      msg = buildMsg({ msgType: 'text', content: text });
+    }
+  }
   sendToPeer(selectedPeer, msg);
   renderMessage(msg, true);
   input.value = '';
   input.style.height = 'auto';
-  // Clear typing indicator for self
   clearTimeout(typingOutTimer);
   emitTyping(false);
-}
-
-function sendCode() {
-  const content = document.getElementById('code-editor').value.trim();
-  if (!content) { showToast('Code is empty'); return; }
-  const msg = buildMsg({
-    msgType: 'code', content,
-    filename: document.getElementById('code-filename').value.trim() || 'snippet',
-    lang: document.getElementById('code-lang').value,
-  });
-  sendToPeer(selectedPeer, msg);
-  renderMessage(msg, true);
-  document.getElementById('code-editor').value = '';
-  showToast('Snippet sent P2P');
-  if (window.innerWidth < 768) showView('chat');
-}
-
-function sendEnv() {
-  const content = document.getElementById('env-editor').value.trim();
-  if (!content) { showToast('.env is empty'); return; }
-  const msg = buildMsg({
-    msgType: 'env', content,
-    filename: document.getElementById('env-filename').value.trim() || '.env',
-  });
-  sendToPeer(selectedPeer, msg);
-  renderMessage(msg, true);
-  document.getElementById('env-editor').value = '';
-  showToast('.env sent P2P');
-  if (window.innerWidth < 768) showView('chat');
 }
 
 const CHUNK_SIZE = 16384;
@@ -1667,19 +1755,10 @@ function downloadCode(id, filename) {
 function setMode(mode) {
   inputMode = mode;
   document.getElementById('input-text-mode').style.display  = mode === 'text' ? 'flex'  : 'none';
-  document.getElementById('input-code-mode').style.display  = mode === 'code' ? 'block' : 'none';
   document.getElementById('input-file-mode').style.display  = mode === 'file' ? 'block' : 'none';
-  ['text', 'code', 'file'].forEach(m => {
+  ['text', 'file'].forEach(m => {
     document.getElementById('mode-' + m).classList.toggle('active', m === mode);
   });
-  if (mode === 'code' && window.innerWidth < 768) showView('code');
-}
-
-function switchCodePanel(tab) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('panel-' + tab).classList.add('active');
-  document.querySelectorAll('.panel-tab')[tab === 'code' ? 0 : 1].classList.add('active');
 }
 
 function setStatus(s) {
@@ -1723,37 +1802,286 @@ function isImageFile(name) {
   return ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'].includes(ext);
 }
 
+function isVideoFile(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'wmv', 'flv'].includes(ext);
+}
+
+function isPDFFile(name) {
+  return (name.split('.').pop() || '').toLowerCase() === 'pdf';
+}
+
+function isTextFile(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return ['txt', 'md', 'json', 'yml', 'yaml', 'log', 'sh', 'css', 'html', 'htm',
+    'js', 'ts', 'jsx', 'tsx', 'py', 'go', 'rs', 'java', 'cpp', 'c', 'h', 'hpp',
+    'sql', 'csv', 'xml', 'toml', 'cfg', 'ini', 'env', 'conf'].includes(ext);
+}
+
+function isViewableFile(name) {
+  return isImageFile(name) || isVideoFile(name) || isPDFFile(name) || isTextFile(name);
+}
+
+function renderPDFPreview(fileDataId, previewId) {
+  const f = fileStore[fileDataId];
+  if (!f) return;
+
+  if (typeof pdfjsLib === 'undefined') {
+    const el = document.getElementById(previewId);
+    if (el) el.innerHTML = '<div class="pdf-loading">PDF preview unavailable</div>';
+    return;
+  }
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdf.worker.min.js';
+
+  pdfjsLib.getDocument(f.data).promise.then(pdf => {
+    pdf.getPage(1).then(page => {
+      const container = document.getElementById(previewId);
+      if (!container) return;
+      container.innerHTML = '';
+
+      const viewport = page.getViewport({ scale: 0.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+
+      page.render({ canvasContext: ctx, viewport }).promise.then(() => {
+        canvas.onclick = () => openImageLightbox(fileDataId);
+        container.appendChild(canvas);
+      });
+    });
+  }).catch(() => {
+    const el = document.getElementById(previewId);
+    if (el) el.innerHTML = '<div class="pdf-loading">Preview failed</div>';
+  });
+}
+
+const LANG_PATTERNS = [
+  { lang: 'js',   patterns: [/=>/, /\b(const|let|var|function|import|export|require|module\.exports|console\.)\b/, /\.js$/] },
+  { lang: 'ts',   patterns: [/\b(interface|type|as|enum|implements|readonly)\b/, /:\s*(string|number|boolean|void|any)\b/, /\.tsx?$/] },
+  { lang: 'py',   patterns: [/\b(def |class |import |from |if __name__|print\s*\(|:\s*pass$|\.py$)/] },
+  { lang: 'go',   patterns: [/\b(package |func |import \(|defer |go func|\.go$)/] },
+  { lang: 'rs',   patterns: [/\b(fn |let mut|pub |impl |use |\.rs$)/] },
+  { lang: 'java', patterns: [/\b(public static|class |void main|@Override|private |protected )/, /\.java$/] },
+  { lang: 'cpp',  patterns: [/#include\s*[<"]/, /\b(int main|cout|cin|std::|\.cpp$|\.h$)/] },
+  { lang: 'c',    patterns: [/#include\s*[<"]/, /\b(int main|printf|scanf|\.c$)/] },
+  { lang: 'html', patterns: [/<\/?[a-z]+[^>]*>/i, /\.html?$/] },
+  { lang: 'css',  patterns: [/[.#][\w-]+\s*\{/, /@media|@import|@keyframes/, /\.css$/] },
+  { lang: 'sql',  patterns: [/\b(SELECT|FROM|WHERE|INSERT|UPDATE|CREATE TABLE|ALTER|DROP)\b/i, /\.sql$/] },
+  { lang: 'sh',   patterns: [/^#!\/bin\/(bash|sh)/, /\b(echo |export |source |chmod )/, /\.sh$/] },
+  { lang: 'json', patterns: [/^[\s]*[\[{]/, /"[\w]+":\s*["[{]/, /\.json$/] },
+  { lang: 'yaml', patterns: [/^[\w-]+:\s/m, /^\s+-\s+/m, /\.ya?ml$/] },
+  { lang: 'toml', patterns: [/^\[[\w.]+\]\s*$/m, /\.toml$/] },
+];
+
+function detectLang(text) {
+  for (const { lang, patterns } of LANG_PATTERNS) {
+    let score = 0;
+    for (const p of patterns) {
+      if (p.test(text)) score += p.toString().includes('$') ? 2 : 1;
+    }
+    if (score >= 2) return lang;
+  }
+  return null;
+}
+
 function playNotificationSound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(660, ctx.currentTime);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.25);
+    const a = new Audio('sound.mp3');
+    a.volume = 0.5;
+    a.play().catch(() => {});
   } catch (_) {}
 }
 
+let lightboxZoom = 1;
+let lightboxPanX = 0, lightboxPanY = 0;
+let lightboxDragging = false;
+let lightboxDragStartX, lightboxDragStartY;
+let lightboxPanStartX, lightboxPanStartY;
+let lightboxFileDataId = null;
+let lightboxKeyHandler = null;
+let lightboxWheelHandler = null;
+let lightboxMouseDownHandler = null;
+let lightboxMouseMoveHandler = null;
+let lightboxMouseUpHandler = null;
+let lightboxBodyClickHandler = null;
+
 function openImageLightbox(fileDataId) {
   const f = fileStore[fileDataId];
-  if (!f) { showToast('Image not available'); return; }
-  const img = document.getElementById('lightbox-img');
-  img.src = f.data;
-  img.alt = f.name;
+  if (!f) { showToast('File not available'); return; }
+  lightboxFileDataId = fileDataId;
+
+  document.getElementById('lightbox-filename').textContent = f.name;
   const dl = document.getElementById('lightbox-dl-btn');
   dl.onclick = () => downloadFile(fileDataId);
+
+  // Hide all content types first
+  const img = document.getElementById('lightbox-img');
+  const video = document.getElementById('lightbox-video');
+  const embed = document.getElementById('lightbox-embed');
+  const textEl = document.getElementById('lightbox-text');
+  const textWrap = textEl.parentElement;
+  const wrap = document.getElementById('lightbox-content-wrap');
+  const actions = document.getElementById('lightbox-actions');
+  img.style.display = 'none';
+  video.style.display = 'none';
+  embed.style.display = 'none';
+  textWrap.style.display = 'none';
+  video.pause();
+  video.src = '';
+  document.getElementById('lightbox-zoom-level').textContent = '';
+
+  if (isImageFile(f.name)) {
+    img.src = f.data;
+    img.alt = f.name;
+    img.style.display = '';
+    actions.classList.remove('hide-zoom');
+    resetZoom();
+    setupImageInteractions(wrap);
+  } else if (isVideoFile(f.name)) {
+    video.src = f.data;
+    video.style.display = '';
+    actions.classList.add('hide-zoom');
+    setupBasicInteractions(wrap);
+  } else if (isPDFFile(f.name)) {
+    embed.src = f.data;
+    embed.style.display = '';
+    actions.classList.add('hide-zoom');
+    setupBasicInteractions(wrap);
+  } else if (isTextFile(f.name)) {
+    textWrap.style.display = '';
+    actions.classList.add('hide-zoom');
+    setupBasicInteractions(wrap);
+    fetch(f.data).then(r => r.text()).then(t => {
+      textEl.textContent = t;
+    }).catch(() => { textEl.textContent = 'Unable to display file content'; });
+  }
+
   document.getElementById('image-lightbox').classList.add('show');
+  document.body.style.overflow = 'hidden';
+
+  // Keyboard: ESC to close
+  lightboxKeyHandler = (e) => {
+    if (e.key === 'Escape') closeImageLightbox();
+  };
+  document.addEventListener('keydown', lightboxKeyHandler);
+
+  // Click outside -> close
+  const body = document.getElementById('lightbox-body');
+  lightboxBodyClickHandler = (e) => {
+    if (e.target === body || e.target === document.getElementById('image-lightbox')) {
+      closeImageLightbox();
+    }
+  };
+  setTimeout(() => body.addEventListener('click', lightboxBodyClickHandler), 0);
+}
+
+function setupImageInteractions(wrap) {
+  lightboxWheelHandler = (e) => {
+    e.preventDefault();
+    if (e.deltaY < 0) zoomIn();
+    else zoomOut();
+  };
+  wrap.addEventListener('wheel', lightboxWheelHandler, { passive: false });
+
+  const body = document.getElementById('lightbox-body');
+  lightboxMouseDownHandler = (e) => {
+    if (lightboxZoom <= 1) return;
+    lightboxDragging = true;
+    lightboxDragStartX = e.clientX;
+    lightboxDragStartY = e.clientY;
+    lightboxPanStartX = lightboxPanX;
+    lightboxPanStartY = lightboxPanY;
+    body.classList.add('dragging');
+  };
+  lightboxMouseMoveHandler = (e) => {
+    if (!lightboxDragging) return;
+    lightboxPanX = lightboxPanStartX + (e.clientX - lightboxDragStartX);
+    lightboxPanY = lightboxPanStartY + (e.clientY - lightboxDragStartY);
+    updateTransform();
+  };
+  lightboxMouseUpHandler = () => {
+    lightboxDragging = false;
+    body.classList.remove('dragging');
+  };
+  body.addEventListener('mousedown', lightboxMouseDownHandler);
+  document.addEventListener('mousemove', lightboxMouseMoveHandler);
+  document.addEventListener('mouseup', lightboxMouseUpHandler);
+}
+
+function setupBasicInteractions(wrap) {
+  lightboxWheelHandler = null;
+  lightboxMouseDownHandler = null;
+  lightboxMouseMoveHandler = null;
+  lightboxMouseUpHandler = null;
 }
 
 function closeImageLightbox() {
+  const video = document.getElementById('lightbox-video');
+  video.pause();
+  video.src = '';
   document.getElementById('image-lightbox').classList.remove('show');
+  document.body.style.overflow = '';
+  if (lightboxKeyHandler) document.removeEventListener('keydown', lightboxKeyHandler);
+  if (lightboxWheelHandler) {
+    const wrap = document.getElementById('lightbox-content-wrap');
+    wrap.removeEventListener('wheel', lightboxWheelHandler);
+  }
+  if (lightboxMouseDownHandler) {
+    const body = document.getElementById('lightbox-body');
+    body.removeEventListener('mousedown', lightboxMouseDownHandler);
+  }
+  if (lightboxMouseMoveHandler) document.removeEventListener('mousemove', lightboxMouseMoveHandler);
+  if (lightboxMouseUpHandler) document.removeEventListener('mouseup', lightboxMouseUpHandler);
+  if (lightboxBodyClickHandler) {
+    const body = document.getElementById('lightbox-body');
+    body.removeEventListener('click', lightboxBodyClickHandler);
+  }
+  lightboxKeyHandler = lightboxWheelHandler = lightboxMouseDownHandler = lightboxMouseMoveHandler = lightboxMouseUpHandler = lightboxBodyClickHandler = null;
+  resetZoom();
 }
+
+function resetZoom() {
+  lightboxZoom = 1;
+  lightboxPanX = 0;
+  lightboxPanY = 0;
+  updateTransform();
+  document.getElementById('lightbox-zoom-level').textContent = '100%';
+  document.getElementById('lightbox-content-wrap').classList.remove('zoomed');
+}
+
+function updateTransform() {
+  const wrap = document.getElementById('lightbox-content-wrap');
+  wrap.style.transform = `translate(${lightboxPanX}px, ${lightboxPanY}px) scale(${lightboxZoom})`;
+}
+
+function zoomIn() {
+  const newZoom = Math.min(lightboxZoom + 0.25, 5);
+  setZoom(newZoom);
+}
+
+function zoomOut() {
+  const newZoom = Math.max(lightboxZoom - 0.25, 0.25);
+  setZoom(newZoom);
+}
+
+function setZoom(z) {
+  lightboxZoom = Math.round(z * 100) / 100;
+  if (lightboxZoom <= 1) {
+    lightboxPanX = 0;
+    lightboxPanY = 0;
+    document.getElementById('lightbox-content-wrap').classList.remove('zoomed');
+  } else {
+    document.getElementById('lightbox-content-wrap').classList.add('zoomed');
+  }
+  updateTransform();
+  document.getElementById('lightbox-zoom-level').textContent = Math.round(lightboxZoom * 100) + '%';
+}
+
+document.getElementById('lightbox-zoom-in').addEventListener('click', zoomIn);
+document.getElementById('lightbox-zoom-out').addEventListener('click', zoomOut);
+document.getElementById('lightbox-zoom-reset').addEventListener('click', resetZoom);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // EVENT LISTENERS
@@ -1822,7 +2150,7 @@ dropOverlay.addEventListener('drop', (e) => {
 
 // Paste files
 window.addEventListener('paste', (e) => {
-  if (['msg-input', 'code-editor'].includes(document.activeElement.id)) return;
+  if (document.activeElement.id === 'msg-input') return;
   const items = e.clipboardData?.items; if (!items) return;
   for (const item of items) {
     if (item.kind === 'file') { const f = item.getAsFile(); if (f) sendFile(f); }
@@ -1845,6 +2173,13 @@ window.addEventListener('resize', () => {
     }, 100);
   }
 });
+
+// ── Sensitive toggle ──────────────────────────────────────────────────────────
+document.getElementById('sensitive-btn').onclick = () => {
+  sensitiveMode = !sensitiveMode;
+  document.getElementById('sensitive-btn').classList.toggle('active', sensitiveMode);
+  document.getElementById('sensitive-btn').textContent = sensitiveMode ? '🔒' : '👁️';
+};
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 setMode('text');
