@@ -1,15 +1,13 @@
 {
   "name": "codedrop-server",
-  "version": "3.0.0",
-  "description": "CodeDrop signaling server with Socket.IO + SQLite persistence",
+  "version": "1.0.0",
+  "description": "WebSocket signaling server for CodeDrop",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.21.0",
-    "socket.io": "^4.7.5",
-    "sql.js": "^1.11.0"
+    "ws": "^8.16.0"
   },
   "engines": {
     "node": ">=18"
