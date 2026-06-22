@@ -1,44 +1,59 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 
 const PORT = process.env.PORT || 4040;
+const DB_PATH = path.join(__dirname, 'codedrop.db');
 
-// ── Database ──────────────────────────────────────────────────────────────────
-const db = new Database(path.join(__dirname, 'codedrop.db'));
-db.pragma('journal_mode = WAL');
+// ── Database (sql.js — pure JS/WASM, no native deps) ──────────────────────────
+let db;
 
-db.exec(`CREATE TABLE IF NOT EXISTS rooms (
-  room_id TEXT PRIMARY KEY,
-  admin_id TEXT,
-  save_messages INTEGER DEFAULT 0
-)`);
+function dbGet(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const row = stmt.step() ? stmt.getAsObject() : null;
+  stmt.free();
+  return row;
+}
 
-db.exec(`CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  message_id TEXT,
-  room_id TEXT NOT NULL,
-  from_id TEXT NOT NULL,
-  from_name TEXT NOT NULL,
-  msg_type TEXT NOT NULL DEFAULT 'text',
-  content TEXT,
-  filename TEXT,
-  file_size INTEGER,
-  file_data_id TEXT,
-  lang TEXT,
-  target_peer TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
-)`);
+function dbAll(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows;
+}
 
-const stmts = {
-  getRoom:     db.prepare('SELECT * FROM rooms WHERE room_id = ?'),
-  createRoom:  db.prepare('INSERT OR IGNORE INTO rooms (room_id, admin_id) VALUES (?, ?)'),
-  setSave:     db.prepare('UPDATE rooms SET save_messages = ? WHERE room_id = ?'),
-  insertMsg:   db.prepare(`INSERT INTO messages (message_id, room_id, from_id, from_name, msg_type, content, filename, file_size, file_data_id, lang, target_peer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-  getMsgs:     db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY id ASC'),
-};
+function dbRun(sql, params = []) {
+  db.run(sql, params);
+  saveDb();
+}
+
+let saveTimer = null;
+function saveDb() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const data = db.export();
+    fs.writeFile(DB_PATH, Buffer.from(data), () => {});
+  }, 200);
+}
+
+async function initDb() {
+  const SQL = await initSqlJs();
+  if (fs.existsSync(DB_PATH)) {
+    const buf = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(buf);
+  } else {
+    db = new SQL.Database();
+  }
+  db.run('CREATE TABLE IF NOT EXISTS rooms (room_id TEXT PRIMARY KEY, admin_id TEXT, save_messages INTEGER DEFAULT 0)');
+  db.run('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT, room_id TEXT NOT NULL, from_id TEXT NOT NULL, from_name TEXT NOT NULL, msg_type TEXT NOT NULL DEFAULT \'text\', content TEXT, filename TEXT, file_size INTEGER, file_data_id TEXT, lang TEXT, target_peer TEXT, created_at TEXT DEFAULT (datetime(\'now\')))');
+  saveDb();
+}
 
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 const app = express();
@@ -53,7 +68,7 @@ const io = new Server(server, {
   pingTimeout: 20_000,
 });
 
-const rooms = new Map(); // roomId -> Map<peerId -> { socketId, name }>
+const rooms = new Map();
 
 function getPeerList(roomId) {
   const room = rooms.get(roomId);
@@ -78,8 +93,8 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId);
     room.set(peerId, { socketId: socket.id, name });
 
-    stmts.createRoom.run(roomId, peerId);
-    const roomInfo = stmts.getRoom.get(roomId);
+    dbRun('INSERT OR IGNORE INTO rooms (room_id, admin_id) VALUES (?, ?)', [roomId, peerId]);
+    const roomInfo = dbGet('SELECT * FROM rooms WHERE room_id = ?', [roomId]);
 
     const existing = [...room.keys()].filter(id => id !== peerId);
     socket.emit('room-peers', { peers: existing });
@@ -93,7 +108,7 @@ io.on('connection', (socket) => {
     socket.emit('save-status', { enabled: roomInfo.save_messages === 1 });
 
     if (roomInfo.save_messages === 1) {
-      const msgs = stmts.getMsgs.all(roomId);
+      const msgs = dbAll('SELECT * FROM messages WHERE room_id = ? ORDER BY id ASC', [roomId]);
       socket.emit('saved-messages', { messages: msgs });
     }
   });
@@ -103,9 +118,7 @@ io.on('connection', (socket) => {
     const targetId = getSocketIdByPeer(myRoom, to);
     if (targetId) {
       io.to(targetId).emit('signal', {
-        from: myId,
-        type,
-        data,
+        from: myId, type, data,
         name: rooms.get(myRoom)?.get(myId)?.name,
       });
     }
@@ -123,14 +136,14 @@ io.on('connection', (socket) => {
       socket.to(myRoom).emit('chat-message', payload);
     }
 
-    const roomInfo = stmts.getRoom.get(myRoom);
+    const roomInfo = dbGet('SELECT save_messages FROM rooms WHERE room_id = ?', [myRoom]);
     if (roomInfo?.save_messages === 1 && msg.msgType !== 'file') {
-      stmts.insertMsg.run(
+      dbRun('INSERT INTO messages (message_id, room_id, from_id, from_name, msg_type, content, filename, file_size, file_data_id, lang, target_peer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
         msg.messageId || null, myRoom, myId, self?.name || '?',
         msg.msgType || 'text', msg.content || null, msg.filename || null,
         msg.fileSize || null, msg.fileDataId || null, msg.lang || null,
-        msg.targetPeer || null
-      );
+        msg.targetPeer || null,
+      ]);
     }
   });
 
@@ -156,7 +169,7 @@ io.on('connection', (socket) => {
 
   socket.on('toggle-save', ({ enabled }) => {
     if (!myRoom) return;
-    stmts.setSave.run(enabled ? 1 : 0, myRoom);
+    dbRun('UPDATE rooms SET save_messages = ? WHERE room_id = ?', [enabled ? 1 : 0, myRoom]);
     io.to(myRoom).emit('save-status', { enabled });
   });
 
@@ -174,6 +187,12 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`CodeDrop v3 (Socket.IO) running on port ${PORT}`);
+// ── Start ─────────────────────────────────────────────────────────────────────
+initDb().then(() => {
+  server.listen(PORT, () => {
+    console.log(`CodeDrop v3 (Socket.IO + sql.js) running on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to init DB:', err);
+  process.exit(1);
 });
