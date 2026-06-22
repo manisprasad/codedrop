@@ -467,6 +467,66 @@
   .empty-title { font-family: var(--sans); font-weight: 700; font-size: 16px; color: var(--text2); }
   .empty-sub { font-size: 12px; line-height: 1.6; max-width: 280px; }
 
+  /* ── IMAGE PREVIEW IN CHAT ── */
+  .msg-image-block {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; max-width: min(320px, 80vw);
+  }
+  .msg-image-preview {
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; min-height: 80px; max-height: 320px; overflow: hidden;
+  }
+  .msg-image-preview img {
+    width: 100%; height: auto; display: block; object-fit: contain;
+    max-height: 320px;
+  }
+  .msg-image-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-top: 1px solid var(--border); gap: 8px;
+  }
+  .msg-image-footer span {
+    font-size: 11px; color: var(--text2); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; flex: 1;
+  }
+  .img-dl-btn {
+    background: transparent; border: 1px solid var(--border2); color: var(--accent);
+    font-family: var(--mono); font-size: 10px; padding: 5px 10px; border-radius: 6px;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+  }
+  .img-dl-btn:hover, .img-dl-btn:active { background: rgba(91,124,255,0.1); border-color: var(--accent); }
+
+  /* Image lightbox modal */
+  #image-lightbox {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; cursor: pointer;
+  }
+  #image-lightbox.show { display: flex; }
+  .lightbox-content {
+    max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column;
+    align-items: center; gap: 12px; cursor: default;
+  }
+  .lightbox-content img {
+    max-width: 100%; max-height: 75vh; object-fit: contain;
+    border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  }
+  .lightbox-actions { display: flex; gap: 10px; }
+  .lightbox-btn {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: #fff; font-family: var(--mono); font-size: 12px; padding: 8px 18px;
+    border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  }
+  .lightbox-btn:hover { background: rgba(255,255,255,0.2); }
+  .lightbox-close {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(255,255,255,0.1); border: none; color: #fff;
+    font-size: 24px; width: 40px; height: 40px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,0.2); }
+
   /* ── TOAST ── */
   #toast {
     position: fixed; bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 12px); left: 50%;
@@ -704,6 +764,16 @@
   </div>
 </div>
 
+<div id="image-lightbox" onclick="closeImageLightbox()">
+  <button class="lightbox-close">&times;</button>
+  <div class="lightbox-content" onclick="event.stopPropagation()">
+    <img id="lightbox-img" src="" alt="" />
+    <div class="lightbox-actions">
+      <button class="lightbox-btn" id="lightbox-dl-btn">⬇ download</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -717,10 +787,10 @@ const ICE_SERVERS = [
 ];
 
 // local
-// const SIGNALING_URL = 'http://localhost:4040';
+const SIGNALING_URL = 'http://localhost:4040';
 
 //server
-const SIGNALING_URL = 'wss://codedrop-tlt0.onrender.com';
+// const SIGNALING_URL = 'wss://codedrop-tlt0.onrender.com';
 
 // Reconnection: exponential backoff config
 const RECONNECT_BASE_MS  = 1_000;  // start at 1s
@@ -736,6 +806,7 @@ let wsReconnectTimer   = null;
 let wsPingInterval     = null;
 let wsReconnectAttempt = 0;        // tracks backoff count
 let wsIntentionalClose = false;    // set true on voluntary leave
+let wsGeneration = 0;              // incremented on each new WS to stale-guard handlers
 
 let peers = {};
 let selectedPeer = 'broadcast';
@@ -877,9 +948,11 @@ function connectWS() {
   }
 
   stopWsPing();
+  const gen = ++wsGeneration;
   ws = new WebSocket(SIGNALING_URL);
 
   ws.onopen = () => {
+    if (gen !== wsGeneration) return; // stale — another connection started
     // Reset backoff on successful connection
     wsReconnectAttempt = 0;
     hideBanner();
@@ -890,6 +963,7 @@ function connectWS() {
   };
 
   ws.onmessage = (e) => {
+    if (gen !== wsGeneration) return;
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
     handleServerMsg(msg);
@@ -897,17 +971,18 @@ function connectWS() {
 
   ws.onclose = () => {
     stopWsPing();
+    if (gen !== wsGeneration) return; // stale
     if (wsIntentionalClose) return; // user left voluntarily — don't reconnect
     scheduleReconnect();
   };
 
   ws.onerror = () => {
-    // onclose fires right after onerror, so just let it handle reconnect
-    ws.close();
+    // onclose will fire after onerror — no need to call ws.close() here
   };
 }
 
 function scheduleReconnect() {
+  if (wsReconnectTimer) return; // already scheduled
   setStatus('connecting');
   showBanner();
 
@@ -936,7 +1011,7 @@ function hideBanner() {
 // Prevent tab visibility changes from killing the connection.
 // When the tab comes back to foreground, verify the socket is still alive.
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && myId) {
+  if (!document.hidden && myId && !wsIntentionalClose) {
     // Tab became visible — check if WS is still open
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       connectWS();
@@ -1345,6 +1420,8 @@ function receiveMessage(msg) {
     updatePeerList();
   }
   renderMessage(msg, false);
+  // Play notification sound for incoming messages from others
+  playNotificationSound();
 }
 
 /**
@@ -1404,15 +1481,30 @@ function renderMessage(msg, isOwn) {
     </div>`;
 
   } else if (msg.msgType === 'file') {
-    const icon = getFileIcon(msg.filename);
-    contentHtml = `<div class="msg-file-block" onclick="downloadFile('${msg.fileDataId}')">
-      <div class="file-icon">${icon}</div>
-      <div class="file-info">
-        <div class="file-name">${escapeHtml(msg.filename)}</div>
-        <div class="file-size">${formatSize(msg.fileSize)}</div>
-      </div>
-      <div class="file-dl">↓</div>
-    </div>`;
+    const isImage = msg.fileDataId && isImageFile(msg.filename);
+    if (isImage) {
+      const f = fileStore[msg.fileDataId];
+      const dataUrl = f ? f.data : '';
+      contentHtml = `<div class="msg-image-block">
+        <div class="msg-image-preview">
+          <img src="${escapeHtml(dataUrl)}" alt="${escapeHtml(msg.filename)}" loading="lazy" onclick="openImageLightbox('${msg.fileDataId}')" />
+        </div>
+        <div class="msg-image-footer">
+          <span>${escapeHtml(msg.filename)} · ${formatSize(msg.fileSize)}</span>
+          <button class="img-dl-btn" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">⬇ download</button>
+        </div>
+      </div>`;
+    } else {
+      const icon = getFileIcon(msg.filename);
+      contentHtml = `<div class="msg-file-block" onclick="downloadFile('${msg.fileDataId}')">
+        <div class="file-icon">${icon}</div>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(msg.filename)}</div>
+          <div class="file-size">${formatSize(msg.fileSize)}</div>
+        </div>
+        <div class="file-dl">↓</div>
+      </div>`;
+    }
   }
 
   el.innerHTML = `
@@ -1624,6 +1716,43 @@ function getFileIcon(name) {
     md:'📝',txt:'📝',sh:'⚙',dockerfile:'🐳',sql:'🗄',csv:'📊',
   };
   return map[ext] || (name.startsWith('.') ? '🔐' : '📁');
+}
+
+function isImageFile(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'].includes(ext);
+}
+
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (_) {}
+}
+
+function openImageLightbox(fileDataId) {
+  const f = fileStore[fileDataId];
+  if (!f) { showToast('Image not available'); return; }
+  const img = document.getElementById('lightbox-img');
+  img.src = f.data;
+  img.alt = f.name;
+  const dl = document.getElementById('lightbox-dl-btn');
+  dl.onclick = () => downloadFile(fileDataId);
+  document.getElementById('image-lightbox').classList.add('show');
+}
+
+function closeImageLightbox() {
+  document.getElementById('image-lightbox').classList.remove('show');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
