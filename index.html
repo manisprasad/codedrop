@@ -6,6 +6,7 @@
 <title>CodeDrop — Ephemeral Code Share</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <style>
   :root {
     --bg: #0d0f14;
@@ -78,6 +79,7 @@
   }
   .icon-btn:hover, .icon-btn:active { border-color: var(--accent); color: var(--accent); background: rgba(91,124,255,0.08); }
   .icon-btn.danger { color: var(--red); border-color: var(--red); }
+  .icon-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(91,124,255,0.08); }
 
   .btn {
     background: transparent; border: 1px solid var(--border2); color: var(--text2);
@@ -182,7 +184,6 @@
   .peer-item.active { background: var(--surface3); }
   .peer-avatar { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; position: relative; }
 
-  /* Online badge on avatar */
   .peer-avatar .online-dot {
     position: absolute; bottom: -2px; right: -2px;
     width: 9px; height: 9px; border-radius: 50%;
@@ -221,12 +222,28 @@
   .chat-target-name { font-size: 13px; font-weight: 500; }
   .chat-target-sub { font-size: 10px; color: var(--text3); }
 
+  .messages-wrap {
+    flex: 1; position: relative; overflow: hidden;
+  }
+
   #messages {
-    flex: 1; overflow-y: auto; padding: 14px;
+    position: absolute; inset: 0; overflow-y: auto; padding: 14px;
     display: flex; flex-direction: column; gap: 10px;
     -webkit-overflow-scrolling: touch;
   }
   #messages::-webkit-scrollbar { display: none; }
+
+  /* Scroll-to-bottom button */
+  #scroll-bottom-btn {
+    position: absolute; bottom: 12px; right: 12px;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text2); font-size: 16px; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    z-index: 10; transition: all 0.2s;
+  }
+  #scroll-bottom-btn.show { display: flex; }
+  #scroll-bottom-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ── MESSAGE BUBBLES ── */
   .msg { display: flex; gap: 8px; animation: msgIn 0.2s ease; max-width: 100%; }
@@ -234,7 +251,6 @@
   .msg.own { flex-direction: row-reverse; }
   .msg-avatar { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 2px; }
 
-  /* FIX: constrain message content and handle overflow */
   .msg-content {
     max-width: min(75%, 480px);
     min-width: 0;
@@ -248,14 +264,17 @@
   .msg-name { font-size: 10px; color: var(--text3); }
   .msg-time { font-size: 10px; color: var(--text3); }
 
-  /* FIX: proper text wrapping in bubbles */
+  /* Blue tick */
+  .msg-status { font-size: 10px; margin-left: 2px; display: inline-flex; align-items: center; }
+  .msg-status .sent { color: var(--text3); }
+  .msg-status .read { color: var(--accent); }
+
   .msg-bubble {
     background: var(--surface2);
     border: 1px solid var(--border);
     border-radius: 14px; border-top-left-radius: 4px;
     padding: 9px 13px;
     font-size: 13px; line-height: 1.5;
-    /* Critical overflow fixes */
     word-break: break-word;
     overflow-wrap: break-word;
     white-space: pre-wrap;
@@ -270,7 +289,6 @@
     border-top-left-radius: 14px;
   }
 
-  /* Copy button on text bubbles */
   .msg-bubble-wrap { position: relative; max-width: 100%; }
   .msg-copy-btn {
     position: absolute; top: 6px; right: 6px;
@@ -309,6 +327,14 @@
   .file-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .file-size { font-size: 10px; color: var(--text3); margin-top: 2px; }
   .file-dl { font-size: 20px; color: var(--accent); flex-shrink: 0; }
+
+  /* Image preview */
+  .msg-image-block {
+    border-radius: 12px; overflow: hidden; max-width: min(320px, 80vw); cursor: pointer;
+    border: 1px solid var(--border); transition: border-color 0.2s;
+  }
+  .msg-image-block:hover { border-color: var(--accent); }
+  .msg-image-block img { width: 100%; height: auto; display: block; }
 
   /* ── TYPING INDICATOR ── */
   #typing-indicator {
@@ -522,7 +548,7 @@
   <div class="setup-card">
     <h1>CodeDrop</h1>
     <div class="byline">by <a href="https://github.com/manisprasad" target="_blank">Manis</a></div>
-    <p>Share code, .env files, zips — P2P via WebRTC. No data stored. Everything vanishes on refresh.</p>
+    <p>Share code, .env files, zips — P2P via WebRTC. Messages can be persisted with admin toggle.</p>
     <div class="field">
       <label>Your Name</label>
       <input type="text" id="setup-name" placeholder="e.g. manis" maxlength="20" autocomplete="off" />
@@ -547,15 +573,15 @@
         <div class="status-dot" id="status-dot"></div>
         <span id="status-text">offline</span>
       </div>
+      <button class="icon-btn" id="save-toggle-btn" style="display:none" title="Toggle message persistence">💾</button>
       <button class="icon-btn" id="copy-room-btn" style="display:none" title="Copy room ID">📋</button>
       <button class="icon-btn danger" id="leave-btn" style="display:none" title="Leave room">✕</button>
     </div>
   </header>
 
-  <!-- Reconnect banner with spinner -->
   <div id="conn-banner">
     <span class="reconnect-spinner"></span>
-    <span id="conn-banner-text">Reconnecting to signaling server…</span>
+    <span id="conn-banner-text">Reconnecting to server…</span>
   </div>
 
   <div class="desktop-layout">
@@ -590,15 +616,17 @@
         </div>
       </div>
 
-      <div id="messages">
-        <div class="empty-state">
-          <div class="empty-icon">⚡</div>
-          <div class="empty-title">Room is live</div>
-          <div class="empty-sub">Share your Room ID. Switch to Peers tab to see who's online.</div>
+      <div class="messages-wrap">
+        <div id="messages">
+          <div class="empty-state">
+            <div class="empty-icon">⚡</div>
+            <div class="empty-title">Room is live</div>
+            <div class="empty-sub">Share your Room ID. Switch to Peers tab to see who's online.</div>
+          </div>
         </div>
+        <button id="scroll-bottom-btn" onclick="scrollToBottom()">↓</button>
       </div>
 
-      <!-- Typing indicator -->
       <div id="typing-indicator"></div>
 
       <div class="input-bar">
@@ -652,7 +680,7 @@
             </div>
           </div>
           <textarea id="code-editor" placeholder="// paste or type code here..."></textarea>
-          <div class="broadcast-note">Sent P2P via WebRTC</div>
+          <div class="broadcast-note">Sent via server</div>
           <button class="btn primary" onclick="sendCode()" style="width:100%;padding:12px">send snippet ↑</button>
         </div>
       </div>
@@ -667,7 +695,7 @@
             style="flex:1;min-height:0;resize:none;line-height:1.6;padding:10px 12px"
             placeholder="DATABASE_URL=postgres://...&#10;API_KEY=sk-...&#10;SECRET=..."></textarea>
           <div class="broadcast-note" style="color:var(--red);border-color:rgba(255,95,95,0.2);background:rgba(255,95,95,0.04)">
-            ⚠ sent P2P — cleared on refresh
+            ⚠ sent via server
           </div>
           <button class="btn primary" onclick="sendEnv()" style="width:100%;padding:12px">send .env ↑</button>
         </div>
@@ -676,7 +704,6 @@
 
   </div><!-- end desktop-layout -->
 
-  <!-- BOTTOM NAV (mobile only) -->
   <nav id="bottom-nav">
     <button class="nav-btn active" id="nav-peers" onclick="showView('peers')">
       <span class="nav-icon">👥</span>
@@ -695,7 +722,6 @@
 
 </div><!-- end app -->
 
-<!-- Global drag and drop overlay -->
 <div id="drop-overlay">
   <div class="drop-overlay-content">
     <div class="drop-overlay-icon">📂</div>
@@ -708,60 +734,67 @@
 
 <script>
 // ══════════════════════════════════════════════════════════════════════════════
-// CONFIG & STATE
+// CONFIG
 // ══════════════════════════════════════════════════════════════════════════════
+const SERVER_URL = window.location.origin;
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   { urls: 'stun:stun2.l.google.com:19302' },
 ];
 
-// local
-// const SIGNALING_URL = 'http://localhost:4040';
-
-//server
-const SIGNALING_URL = 'wss://codedrop-tlt0.onrender.com';
-
-// Reconnection: exponential backoff config
-const RECONNECT_BASE_MS  = 1_000;  // start at 1s
-const RECONNECT_MAX_MS   = 30_000; // cap at 30s
-const RECONNECT_JITTER   = 500;    // ±500ms jitter to avoid thundering herd
-
-// Heartbeat: client-side keep-alive to prevent proxy/tab idle-kill
-const WS_PING_INTERVAL   = 20_000; // send a ping every 20s
-
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
 let myId = null, myName = null, roomId = null;
-let ws = null;
-let wsReconnectTimer   = null;
-let wsPingInterval     = null;
-let wsReconnectAttempt = 0;        // tracks backoff count
-let wsIntentionalClose = false;    // set true on voluntary leave
-
+let socket = null;
 let peers = {};
 let selectedPeer = 'broadcast';
-let inputMode    = 'text';
-let currentView  = 'peers';       // mobile active view
-let unreadChat   = 0;
-const fileStore  = {};
-
-// Typing indicator state: Map<peerId, { name, timer }>
+let inputMode = 'text';
+let currentView = 'peers';
+let unreadChat = 0;
+let isAdmin = false;
+let saveEnabled = false;
+const fileStore = {};
+const messageStatus = {};
 const typingPeers = new Map();
-let   typingOutTimer = null;       // debounce for local outgoing typing events
+let typingOutTimer = null;
+const pendingReadReceipts = {}; // peerId -> array of messageIds
 
-const COLORS  = ['#5b7cff','#7b5bf6','#2dba7a','#f5a623','#ff5f5f','#00c9b1','#ff7849'];
+const COLORS = ['#5b7cff','#7b5bf6','#2dba7a','#f5a623','#ff5f5f','#00c9b1','#ff7849'];
 const AVATARS = ['🦊','🐉','🤖','🦁','🐺','🦅','🐬','🦋'];
 
-function randomId(len = 8) { return Math.random().toString(36).substr(2, len).toUpperCase(); }
-function getColor(id)  { let h=0; for (const c of id) h=(h*31+c.charCodeAt(0))%COLORS.length;  return COLORS[h]; }
+function randomId(len) { return Math.random().toString(36).substr(2, len || 8).toUpperCase(); }
+function getColor(id) { let h=0; for (const c of id) h=(h*31+c.charCodeAt(0))%COLORS.length; return COLORS[h]; }
 function getAvatar(id) { let h=0; for (const c of id) h=(h*17+c.charCodeAt(0))%AVATARS.length; return AVATARS[h]; }
 function ts() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 function formatSize(b) { if(b<1024) return b+'B'; if(b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SOUND
+// ══════════════════════════════════════════════════════════════════════════════
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (_) {}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // MOBILE VIEW SWITCHING
 // ══════════════════════════════════════════════════════════════════════════════
 function showView(view) {
-  if (window.innerWidth >= 768) return; // desktop: all panels visible simultaneously
+  if (window.innerWidth >= 768) return;
   currentView = view;
   ['peers', 'chat', 'code'].forEach(v => {
     document.getElementById('view-' + v).classList.toggle('active', v === view);
@@ -771,10 +804,8 @@ function showView(view) {
   if (view === 'chat') {
     unreadChat = 0;
     document.getElementById('chat-badge').classList.remove('show');
-    setTimeout(() => {
-      const m = document.getElementById('messages');
-      if (m) m.scrollTop = m.scrollHeight;
-    }, 100);
+    flushReadReceipts();
+    setTimeout(() => scrollToBottom(), 100);
   }
 }
 
@@ -814,9 +845,10 @@ document.getElementById('setup-name').addEventListener('keydown', e => {
   }
 });
 
-document.getElementById('leave-btn').onclick   = leaveRoom;
+document.getElementById('leave-btn').onclick    = leaveRoom;
 document.getElementById('copy-room-btn').onclick = copyRoom;
 document.getElementById('room-display').onclick  = copyRoom;
+document.getElementById('save-toggle-btn').onclick = toggleSave;
 
 function copyRoom() {
   navigator.clipboard.writeText(roomId).catch(() => {});
@@ -824,13 +856,7 @@ function copyRoom() {
 }
 
 function leaveRoom() {
-  wsIntentionalClose = true;
-  clearReconnect();
-  stopWsPing();
-  if (ws) {
-    try { wsSend({ type: 'bye' }); ws.close(); } catch (_) {}
-    ws = null;
-  }
+  if (socket) socket.disconnect();
   location.reload();
 }
 
@@ -844,218 +870,159 @@ function initRoom(name) {
   document.getElementById('leave-btn').style.display     = 'flex';
   setStatus('connecting');
   showView('peers');
-  connectWS();
+  connectSocket();
+}
+
+function toggleSave() {
+  if (!isAdmin) return;
+  socket.emit('toggle-save', { enabled: !saveEnabled });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// WEBSOCKET — reconnection + heartbeat
+// SOCKET.IO
 // ══════════════════════════════════════════════════════════════════════════════
-function clearReconnect() {
-  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-}
+function connectSocket() {
+  socket = io(SERVER_URL, {
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 30000,
+    randomizationFactor: 0.5,
+  });
 
-function startWsPing() {
-  stopWsPing();
-  wsPingInterval = setInterval(() => {
-    // Send a lightweight ping to keep the connection alive through proxies
-    // and prevent browser tab throttling from closing the socket.
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try { ws.send(JSON.stringify({ type: 'ping' })); } catch (_) {}
-    }
-  }, WS_PING_INTERVAL);
-}
-
-function stopWsPing() {
-  if (wsPingInterval) { clearInterval(wsPingInterval); wsPingInterval = null; }
-}
-
-function connectWS() {
-  clearReconnect();
-  if (ws) {
-    try { ws.close(); } catch (_) {}
-    ws = null;
-  }
-
-  stopWsPing();
-  ws = new WebSocket(SIGNALING_URL);
-
-  ws.onopen = () => {
-    // Reset backoff on successful connection
-    wsReconnectAttempt = 0;
+  socket.on('connect', () => {
+    setStatus('connecting');
     hideBanner();
-    setStatus('connecting'); // will become 'connected' on room-peers
-    // Re-join the room (restores session after reconnect)
-    wsSend({ type: 'join', peerId: myId, roomId, name: myName });
-    startWsPing();
-  };
+    socket.emit('join-room', { roomId, peerId: myId, name: myName });
+  });
 
-  ws.onmessage = (e) => {
-    let msg;
-    try { msg = JSON.parse(e.data); } catch { return; }
-    handleServerMsg(msg);
-  };
+  socket.on('disconnect', () => {
+    setStatus('connecting');
+    showBanner();
+  });
 
-  ws.onclose = () => {
-    stopWsPing();
-    if (wsIntentionalClose) return; // user left voluntarily — don't reconnect
-    scheduleReconnect();
-  };
+  socket.on('connect_error', () => {
+    setStatus('error');
+    showBanner();
+  });
 
-  ws.onerror = () => {
-    // onclose fires right after onerror, so just let it handle reconnect
-    ws.close();
-  };
-}
-
-function scheduleReconnect() {
-  setStatus('connecting');
-  showBanner();
-
-  // Exponential backoff: base * 2^attempt, capped, with jitter
-  const delay = Math.min(
-    RECONNECT_BASE_MS * Math.pow(2, wsReconnectAttempt) + Math.random() * RECONNECT_JITTER,
-    RECONNECT_MAX_MS
-  );
-  wsReconnectAttempt++;
-
-  const bannerText = document.getElementById('conn-banner-text');
-  if (bannerText) {
-    bannerText.textContent = `Reconnecting… (attempt ${wsReconnectAttempt}, ${Math.round(delay/1000)}s)`;
-  }
-
-  wsReconnectTimer = setTimeout(connectWS, delay);
-}
-
-function showBanner() {
-  document.getElementById('conn-banner').classList.add('show');
-}
-function hideBanner() {
-  document.getElementById('conn-banner').classList.remove('show');
-}
-
-// Prevent tab visibility changes from killing the connection.
-// When the tab comes back to foreground, verify the socket is still alive.
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && myId) {
-    // Tab became visible — check if WS is still open
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      connectWS();
+  socket.on('room-peers', ({ peers: existingPeers }) => {
+    setStatus('connected');
+    addSysMsg('You joined as "' + myName + '"');
+    for (const peerId of existingPeers) {
+      createPeerConnection(peerId, true);
     }
-  }
-});
+  });
 
-function wsSend(msg) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(msg));
-  }
+  socket.on('peer-joined', ({ peerId }) => {
+    socket.emit('signal', { to: peerId, type: 'hello', data: { name: myName } });
+  });
+
+  socket.on('peer-left', ({ peerId }) => {
+    removePeer(peerId);
+  });
+
+  socket.on('user-list', ({ users }) => {
+    handleUserList(users);
+  });
+
+  socket.on('signal', ({ from, type, data, name }) => {
+    if (type === 'hello') {
+      if (peers[from]) peers[from].name = name;
+      else createPeerConnection(from, false).then(() => { if (peers[from]) peers[from].name = name; });
+      updatePeerList();
+      socket.emit('signal', { to: from, type: 'hello-ack', data: { name: myName } });
+    } else if (type === 'hello-ack') {
+      if (peers[from]) peers[from].name = name;
+      updatePeerList();
+    } else if (type === 'offer') {
+      handleOffer(from, data.sdp, name);
+    } else if (type === 'answer') {
+      if (peers[from]?.pc) peers[from].pc.setRemoteDescription({ type: 'answer', sdp: data.sdp }).catch(() => {});
+    } else if (type === 'ice-candidate') {
+      if (peers[from]?.pc && data.candidate) peers[from].pc.addIceCandidate(data.candidate).catch(() => {});
+    }
+  });
+
+  socket.on('chat-message', (msg) => {
+    if (msg.from === myId) return;
+    receiveMessage(msg);
+    playNotificationSound();
+  });
+
+  socket.on('typing', (data) => {
+    handleTypingEvent(data);
+  });
+
+  socket.on('read-receipt', ({ messageIds, readBy }) => {
+    messageIds.forEach(id => {
+      messageStatus[id] = 'read';
+      const el = document.querySelector(`[data-msg-id="${id}"] .msg-status`);
+      if (el) el.innerHTML = '<span class="read">✓✓</span>';
+    });
+  });
+
+  socket.on('admin-status', ({ isAdmin: admin }) => {
+    isAdmin = admin;
+    const btn = document.getElementById('save-toggle-btn');
+    btn.style.display = admin ? 'flex' : 'none';
+  });
+
+  socket.on('save-status', ({ enabled }) => {
+    saveEnabled = enabled;
+    const btn = document.getElementById('save-toggle-btn');
+    btn.innerHTML = enabled ? '💾' : '💾';
+    btn.title = enabled ? 'Saving messages: ON' : 'Saving messages: OFF';
+    btn.classList.toggle('active', enabled);
+  });
+
+  socket.on('saved-messages', ({ messages }) => {
+    for (const msg of messages) {
+      renderMessage({
+        from: msg.from_id,
+        senderName: msg.from_name,
+        messageId: msg.message_id,
+        msgType: msg.msg_type,
+        content: msg.content,
+        filename: msg.filename,
+        fileSize: msg.file_size,
+        fileDataId: msg.file_data_id,
+        lang: msg.lang,
+        targetPeer: msg.target_peer,
+      }, false);
+    }
+    if (messages.length) addSysMsg('Loaded ' + messages.length + ' saved messages');
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SERVER MESSAGE HANDLER
+// READ RECEIPTS
 // ══════════════════════════════════════════════════════════════════════════════
-async function handleServerMsg(msg) {
-  switch (msg.type) {
-    // ── Room joined successfully ───────────────────────────────────────────
-    case 'room-peers':
-      setStatus('connected');
-      hideBanner();
-      addSysMsg('You joined as "' + myName + '"');
-      for (const peerId of msg.peers) {
-        await createPeerConnection(peerId, true);
-      }
-      break;
+function markAsRead(fromPeerId, messageIds) {
+  if (!messageIds.length) return;
+  socket.emit('mark-read', { messageIds, from: fromPeerId });
+}
 
-    // ── Server user list broadcast ─────────────────────────────────────────
-    // Keeps a server-side authoritative list of online users.
-    case 'user-list':
-      handleUserList(msg.users);
-      break;
-
-    // ── WebRTC signaling ───────────────────────────────────────────────────
-    case 'peer-joined':
-      wsSend({ type: 'hello', to: msg.peerId, name: myName });
-      break;
-
-    case 'hello':
-      if (peers[msg.from]) {
-        peers[msg.from].name = msg.name;
-        updatePeerList();
-      } else {
-        await createPeerConnection(msg.from, false);
-        if (peers[msg.from]) peers[msg.from].name = msg.name;
-        updatePeerList();
-      }
-      wsSend({ type: 'hello-ack', to: msg.from, name: myName });
-      break;
-
-    case 'hello-ack':
-      if (peers[msg.from]) { peers[msg.from].name = msg.name; updatePeerList(); }
-      break;
-
-    case 'offer':
-      await handleOffer(msg.from, msg.sdp, msg.name);
-      break;
-
-    case 'answer':
-      if (peers[msg.from]?.pc) {
-        await peers[msg.from].pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
-      }
-      break;
-
-    case 'ice-candidate':
-      if (peers[msg.from]?.pc && msg.candidate) {
-        try { await peers[msg.from].pc.addIceCandidate(msg.candidate); } catch (_) {}
-      }
-      break;
-
-    case 'peer-left':
-      removePeer(msg.peerId);
-      break;
-
-    // ── Typing indicator (server-relayed) ─────────────────────────────────
-    case 'typing':
-      handleTypingEvent(msg);
-      break;
-
-    // ── Chat messages relayed via signaling server ─────────────────────────
-    case 'message':
-      receiveMessage(msg);
-      break;
-
-    // ── Ignore server pong / unknown types ────────────────────────────────
-    default:
-      break;
-  }
+function flushReadReceipts() {
+  Object.keys(pendingReadReceipts).forEach(peerId => {
+    const ids = pendingReadReceipts[peerId];
+    if (ids.length) markAsRead(peerId, ids);
+    pendingReadReceipts[peerId] = [];
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SERVER-SIDE USER LIST (authoritative online users map)
+// SERVER-SIDE USER LIST
 // ══════════════════════════════════════════════════════════════════════════════
-// The server broadcasts { type:'user-list', users:[{peerId,name},...] }
-// whenever anyone joins or leaves.  We merge this into our local peer state
-// for accurate online/offline badges.
 function handleUserList(users) {
-  // users is an array of { peerId, name }
   const onlineIds = new Set(users.map(u => u.peerId));
-
-  // Mark as offline any peer that's no longer in the list
   Object.keys(peers).forEach(id => {
-    if (!onlineIds.has(id) && peers[id]) {
-      peers[id].online = false;
-    }
+    if (!onlineIds.has(id) && peers[id]) peers[id].online = false;
   });
-
-  // Update name/online status for listed peers
   users.forEach(({ peerId, name }) => {
-    if (peerId === myId) return; // skip self
-    if (peers[peerId]) {
-      peers[peerId].online = true;
-      if (name) peers[peerId].name = name;
-    }
-    // Note: we don't create peer objects here — WebRTC handles that.
-    // This is purely metadata for the UI badge.
+    if (peerId === myId) return;
+    if (peers[peerId]) { peers[peerId].online = true; if (name) peers[peerId].name = name; }
   });
-
   updatePeerList();
   updatePeerCount();
 }
@@ -1072,7 +1039,7 @@ async function createPeerConnection(peerId, isInitiator) {
   };
 
   pc.onicecandidate = (e) => {
-    if (e.candidate) wsSend({ type: 'ice-candidate', to: peerId, candidate: e.candidate });
+    if (e.candidate) socket.emit('signal', { to: peerId, type: 'ice-candidate', data: { candidate: e.candidate } });
   };
 
   pc.onconnectionstatechange = () => {
@@ -1087,7 +1054,7 @@ async function createPeerConnection(peerId, isInitiator) {
     peers[peerId].dc = dc;
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    wsSend({ type: 'offer', to: peerId, sdp: offer.sdp, name: myName });
+    socket.emit('signal', { to: peerId, type: 'offer', data: { sdp: offer.sdp } });
   } else {
     pc.ondatachannel = (e) => { peers[peerId].dc = e.channel; setupDataChannel(peerId, e.channel); };
   }
@@ -1105,7 +1072,7 @@ async function handleOffer(peerId, sdp, senderName) {
   if (senderName) peers[peerId].name = senderName;
 
   pc.onicecandidate = (e) => {
-    if (e.candidate) wsSend({ type: 'ice-candidate', to: peerId, candidate: e.candidate });
+    if (e.candidate) socket.emit('signal', { to: peerId, type: 'ice-candidate', data: { candidate: e.candidate } });
   };
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
@@ -1117,7 +1084,7 @@ async function handleOffer(peerId, sdp, senderName) {
   await pc.setRemoteDescription({ type: 'offer', sdp });
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  wsSend({ type: 'answer', to: peerId, sdp: answer.sdp });
+  socket.emit('signal', { to: peerId, type: 'answer', data: { sdp: answer.sdp } });
 }
 
 function setupDataChannel(peerId, dc) {
@@ -1141,16 +1108,11 @@ function setupDataChannel(peerId, dc) {
   dc.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
-
     if (msg.type === 'hello') { peers[peerId].name = msg.name; updatePeerList(); return; }
-
-    // Typing indicator over data channel (direct peer)
     if (msg.type === 'typing') {
       handleTypingEvent({ from: peerId, name: peers[peerId]?.name, isTyping: msg.isTyping });
       return;
     }
-
-    // Chunked file transfer
     if (msg.type === 'chunk-start') { chunkBuffer[msg.transferId] = { meta: msg, parts: [], received: 0 }; return; }
     if (msg.type === 'chunk') {
       const b = chunkBuffer[msg.transferId];
@@ -1172,7 +1134,6 @@ function setupDataChannel(peerId, dc) {
       }
       return;
     }
-
     if (msg.type === 'message') {
       msg.from = peerId;
       msg.senderName = peers[peerId]?.name || peerId.slice(0, 6);
@@ -1189,11 +1150,6 @@ function dcSend(peerId, data) {
   return false;
 }
 
-function sendToPeer(peerId, data) {
-  if (peerId === 'broadcast') Object.keys(peers).forEach(id => dcSend(id, data));
-  else dcSend(peerId, data);
-}
-
 // ══════════════════════════════════════════════════════════════════════════════
 // PEER MANAGEMENT
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1201,7 +1157,6 @@ function removePeer(id) {
   if (!peers[id]) return;
   addSysMsg((peers[id].name || id.slice(0, 6)) + ' disconnected');
   try { peers[id].pc?.close(); } catch (_) {}
-  // Clear any typing state for this peer
   typingPeers.delete(id);
   renderTypingIndicator();
   delete peers[id];
@@ -1211,16 +1166,12 @@ function removePeer(id) {
 function updatePeerList() {
   const list    = document.getElementById('peer-list');
   const peerArr = Object.values(peers).filter(p => p.dcOpen);
-
   if (peerArr.length === 0) {
     list.innerHTML = `<div style="padding:20px 16px;font-size:12px;color:var(--text3);text-align:center;line-height:1.8">
       Waiting for peers...<br><span style="font-size:10px">Share your Room ID below</span></div>`;
     return;
   }
-
   list.innerHTML = '';
-
-  // Broadcast row
   const bEl = document.createElement('div');
   bEl.className = 'peer-item' + (selectedPeer === 'broadcast' ? ' active' : '');
   bEl.onclick = () => { selectPeer('broadcast'); if (window.innerWidth < 768) showView('chat'); };
@@ -1233,7 +1184,6 @@ function updatePeerList() {
     const el = document.createElement('div');
     el.className = 'peer-item' + (selectedPeer === p.id ? ' active' : '');
     el.onclick = () => { selectPeer(p.id); if (window.innerWidth < 768) showView('chat'); };
-    // Online badge: green dot if server confirms online, dim otherwise
     const isOnline = p.online !== false;
     el.innerHTML = `
       <div class="peer-avatar" style="background:${p.color}22;color:${p.color}">
@@ -1258,6 +1208,8 @@ function selectPeer(id) {
     peers[id].unread = 0;
     document.getElementById('chat-target-name').textContent = peers[id].name;
     document.getElementById('chat-target-sub').textContent  = 'direct message · p2p';
+    const pending = pendingReadReceipts[id];
+    if (pending?.length) { markAsRead(id, pending); pendingReadReceipts[id] = []; }
   }
   updatePeerList();
 }
@@ -1270,74 +1222,52 @@ function updatePeerCount() {
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPING INDICATOR
 // ══════════════════════════════════════════════════════════════════════════════
-const TYPING_EXPIRE_MS = 3_000; // auto-clear after 3s of no update
+const TYPING_EXPIRE_MS = 3_000;
 
-/**
- * Called when we receive a typing event from a remote peer.
- */
 function handleTypingEvent({ from, name, isTyping }) {
   if (from === myId) return;
-
   if (isTyping) {
-    // Reset the auto-expire timer for this peer
     const existing = typingPeers.get(from);
     if (existing?.timer) clearTimeout(existing.timer);
-
     const timer = setTimeout(() => {
       typingPeers.delete(from);
       renderTypingIndicator();
     }, TYPING_EXPIRE_MS);
-
     typingPeers.set(from, { name: name || peers[from]?.name || from.slice(0, 6), timer });
   } else {
     const existing = typingPeers.get(from);
     if (existing?.timer) clearTimeout(existing.timer);
     typingPeers.delete(from);
   }
-
   renderTypingIndicator();
 }
 
-/**
- * Render the typing indicator bar.
- */
 function renderTypingIndicator() {
   const el = document.getElementById('typing-indicator');
   if (!el) return;
-
-  if (typingPeers.size === 0) {
-    el.innerHTML = '';
-    return;
-  }
-
+  if (typingPeers.size === 0) { el.innerHTML = ''; return; }
   const names = [...typingPeers.values()].map(t => escapeHtml(t.name));
   let label;
   if (names.length === 1) label = `${names[0]} is typing`;
   else if (names.length === 2) label = `${names[0]} and ${names[1]} are typing`;
   else label = `${names[0]} and ${names.length - 1} others are typing`;
-
   el.innerHTML = `
     <div class="typing-dots"><span></span><span></span><span></span></div>
     <span>${label}…</span>`;
 }
 
-/**
- * Emit typing events from the local user (debounced, 400ms).
- */
 function emitTyping(isTyping) {
-  const payload = { type: 'typing', isTyping };
-  // Send via data channel to connected peers, and via WS to relay to others
-  Object.keys(peers).forEach(id => {
-    if (peers[id].dcOpen) dcSend(id, payload);
+  socket.emit('typing', {
+    to: selectedPeer === 'broadcast' ? undefined : selectedPeer,
+    isTyping,
   });
-  // Also relay via signaling server for peers not yet P2P connected
-  wsSend({ ...payload, to: selectedPeer === 'broadcast' ? undefined : selectedPeer });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MESSAGES
 // ══════════════════════════════════════════════════════════════════════════════
 function receiveMessage(msg) {
+  if (msg.from === myId) return;
   const inView = currentView === 'chat' || window.innerWidth >= 768;
   if (!inView) notifyChatUnread();
   if (peers[msg.from]) {
@@ -1345,12 +1275,17 @@ function receiveMessage(msg) {
     updatePeerList();
   }
   renderMessage(msg, false);
+
+  if (msg.messageId && msg.from) {
+    if (selectedPeer === msg.from || msg.to === myId || (selectedPeer === 'broadcast' && !msg.to)) {
+      markAsRead(msg.from, [msg.messageId]);
+    } else {
+      if (!pendingReadReceipts[msg.from]) pendingReadReceipts[msg.from] = [];
+      pendingReadReceipts[msg.from].push(msg.messageId);
+    }
+  }
 }
 
-/**
- * Render a message bubble into the chat.
- * Includes a "copy" button on all message types.
- */
 function renderMessage(msg, isOwn) {
   const container = document.getElementById('messages');
   const empty = container.querySelector('.empty-state');
@@ -1367,12 +1302,11 @@ function renderMessage(msg, isOwn) {
   let contentHtml = '';
 
   if (msg.msgType === 'text') {
-    // Wrap in a relative container so the copy button can be positioned
     const msgId = 'msg_' + Math.random().toString(36).substr(2, 8);
     contentHtml = `
       <div class="msg-bubble-wrap">
         <div class="msg-bubble" id="${msgId}">${escapeHtml(msg.content)}</div>
-        <button class="msg-copy-btn" onclick="copyMsgText('${msgId}', this)" title="Copy message">copy</button>
+        <button class="msg-copy-btn" onclick="copyMsgText('${msgId}', this)">copy</button>
       </div>`;
 
   } else if (msg.msgType === 'code') {
@@ -1404,16 +1338,26 @@ function renderMessage(msg, isOwn) {
     </div>`;
 
   } else if (msg.msgType === 'file') {
-    const icon = getFileIcon(msg.filename);
-    contentHtml = `<div class="msg-file-block" onclick="downloadFile('${msg.fileDataId}')">
-      <div class="file-icon">${icon}</div>
-      <div class="file-info">
-        <div class="file-name">${escapeHtml(msg.filename)}</div>
-        <div class="file-size">${formatSize(msg.fileSize)}</div>
-      </div>
-      <div class="file-dl">↓</div>
-    </div>`;
+    const isImage = msg.filename && /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(msg.filename);
+    if (isImage && fileStore[msg.fileDataId]) {
+      contentHtml = `<div class="msg-image-block" onclick="downloadFile('${msg.fileDataId}')">
+        <img src="${fileStore[msg.fileDataId].data}" alt="${escapeHtml(msg.filename)}" loading="lazy" />
+      </div>`;
+    } else {
+      const icon = getFileIcon(msg.filename);
+      contentHtml = `<div class="msg-file-block" onclick="downloadFile('${msg.fileDataId}')">
+        <div class="file-icon">${icon}</div>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(msg.filename)}</div>
+          <div class="file-size">${formatSize(msg.fileSize)}</div>
+        </div>
+        <div class="file-dl">↓</div>
+      </div>`;
+    }
   }
+
+  const msgId = msg.messageId || 'msg_' + Math.random().toString(36).substr(2, 8);
+  const isRead = isOwn && messageStatus[msgId] === 'read';
 
   el.innerHTML = `
     <div class="msg-avatar" style="background:${color}22;color:${color}">${avatar}</div>
@@ -1421,20 +1365,27 @@ function renderMessage(msg, isOwn) {
       <div class="msg-meta">
         <span class="msg-name">${escapeHtml(name)}</span>
         <span class="msg-time">${ts()}</span>
+        ${isOwn ? `<span class="msg-status" data-msg-id="${msgId}">${isRead ? '<span class="read">✓✓</span>' : '<span class="sent">✓</span>'}</span>` : ''}
         ${!isOwn && msg.targetPeer !== 'broadcast' ? '<span style="font-size:9px;color:var(--accent)">dm</span>' : ''}
       </div>
       ${contentHtml}
     </div>`;
 
+  if (isOwn && msgId) {
+    el.querySelector('.msg-content')?.setAttribute('data-msg-id', msgId);
+  }
+
   container.appendChild(el);
-  container.scrollTop = container.scrollHeight;
+  scrollToBottom();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SEND FUNCTIONS
 // ══════════════════════════════════════════════════════════════════════════════
 function buildMsg(extra) {
-  return { type: 'message', from: myId, senderName: myName, targetPeer: selectedPeer, ...extra };
+  const messageId = 'msg_' + randomId(8);
+  messageStatus[messageId] = 'sent';
+  return { messageId, targetPeer: selectedPeer, to: selectedPeer === 'broadcast' ? undefined : selectedPeer, ...extra };
 }
 
 function sendText() {
@@ -1442,11 +1393,10 @@ function sendText() {
   const text  = input.value.trim();
   if (!text) return;
   const msg = buildMsg({ msgType: 'text', content: text });
-  sendToPeer(selectedPeer, msg);
-  renderMessage(msg, true);
+  socket.emit('chat-message', msg);
+  renderMessage({ from: myId, senderName: myName, ...msg }, true);
   input.value = '';
   input.style.height = 'auto';
-  // Clear typing indicator for self
   clearTimeout(typingOutTimer);
   emitTyping(false);
 }
@@ -1459,10 +1409,10 @@ function sendCode() {
     filename: document.getElementById('code-filename').value.trim() || 'snippet',
     lang: document.getElementById('code-lang').value,
   });
-  sendToPeer(selectedPeer, msg);
-  renderMessage(msg, true);
+  socket.emit('chat-message', msg);
+  renderMessage({ from: myId, senderName: myName, ...msg }, true);
   document.getElementById('code-editor').value = '';
-  showToast('Snippet sent P2P');
+  showToast('Snippet sent');
   if (window.innerWidth < 768) showView('chat');
 }
 
@@ -1473,14 +1423,15 @@ function sendEnv() {
     msgType: 'env', content,
     filename: document.getElementById('env-filename').value.trim() || '.env',
   });
-  sendToPeer(selectedPeer, msg);
-  renderMessage(msg, true);
+  socket.emit('chat-message', msg);
+  renderMessage({ from: myId, senderName: myName, ...msg }, true);
   document.getElementById('env-editor').value = '';
-  showToast('.env sent P2P');
+  showToast('.env sent');
   if (window.innerWidth < 768) showView('chat');
 }
 
 const CHUNK_SIZE = 16384;
+
 function sendFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -1525,9 +1476,6 @@ function downloadFile(fileDataId) {
 }
 
 // ── Copy helpers ──────────────────────────────────────────────────────────────
-/**
- * Copy a text message bubble and show feedback on the button.
- */
 function copyMsgText(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1538,9 +1486,6 @@ function copyMsgText(id, btn) {
   }).catch(() => showToast('Copy failed'));
 }
 
-/**
- * Copy a code/env block with button feedback.
- */
 function copyCodeBlock(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1551,14 +1496,6 @@ function copyCodeBlock(id, btn) {
   }).catch(() => showToast('Copy failed'));
 }
 
-/** Legacy alias (used in existing onclick attrs) */
-function copyCode(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  navigator.clipboard.writeText(el.textContent).catch(() => {});
-  showToast('Copied!');
-}
-
 function downloadCode(id, filename) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1567,6 +1504,15 @@ function downloadCode(id, filename) {
   const a    = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SCROLL TO BOTTOM
+// ══════════════════════════════════════════════════════════════════════════════
+function scrollToBottom() {
+  const m = document.getElementById('messages');
+  if (m) { m.scrollTop = m.scrollHeight; }
+  document.getElementById('scroll-bottom-btn')?.classList.remove('show');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1631,28 +1577,22 @@ function getFileIcon(name) {
 // ══════════════════════════════════════════════════════════════════════════════
 const msgInput = document.getElementById('msg-input');
 
-// Send on Enter (Shift+Enter for newline)
 msgInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
 });
 
-// Auto-resize + debounced typing indicator (400ms)
 msgInput.addEventListener('input', function () {
   this.style.height = 'auto';
   this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-
-  // Emit typing=true, then schedule a typing=false after 2s of silence
   clearTimeout(typingOutTimer);
   emitTyping(true);
   typingOutTimer = setTimeout(() => emitTyping(false), 2000);
 });
 
-// File input
 document.getElementById('file-input').onchange = (e) => {
   [...e.target.files].forEach(sendFile); e.target.value = '';
 };
 
-// Drag-and-drop — local zone
 const dropZone = document.getElementById('drop-zone');
 ['dragover', 'dragenter'].forEach(ev =>
   dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); })
@@ -1665,7 +1605,6 @@ dropZone.addEventListener('drop', (e) => {
   [...e.dataTransfer.files].forEach(sendFile);
 });
 
-// Drag-and-drop — global overlay (anywhere in the app)
 const dropOverlay = document.getElementById('drop-overlay');
 let dragCounter = 0;
 
@@ -1691,7 +1630,6 @@ dropOverlay.addEventListener('drop', (e) => {
   [...e.dataTransfer.files].forEach(sendFile);
 });
 
-// Paste files
 window.addEventListener('paste', (e) => {
   if (['msg-input', 'code-editor'].includes(document.activeElement.id)) return;
   const items = e.clipboardData?.items; if (!items) return;
@@ -1700,24 +1638,33 @@ window.addEventListener('paste', (e) => {
   }
 });
 
-// Graceful shutdown (best-effort)
 window.addEventListener('beforeunload', () => {
-  if (ws) { try { ws.send(JSON.stringify({ type: 'bye' })); ws.close(); } catch (_) {} }
+  if (socket) socket.disconnect();
 });
 
-// Mobile keyboard push-up
 let initialVH = window.innerHeight;
 window.addEventListener('resize', () => {
   const newVH = window.innerHeight;
   if (newVH < initialVH - 100) {
-    setTimeout(() => {
-      const m = document.getElementById('messages');
-      if (m) m.scrollTop = m.scrollHeight;
-    }, 100);
+    setTimeout(() => scrollToBottom(), 100);
   }
 });
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
+// Auto-scroll button visibility
+document.getElementById('messages')?.addEventListener('scroll', function () {
+  const btn = document.getElementById('scroll-bottom-btn');
+  if (!btn) return;
+  const isNearBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 100;
+  btn.classList.toggle('show', !isNearBottom);
+});
+
+document.getElementById('setup-room').addEventListener('input', function () {
+  this.value = this.value.toUpperCase();
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOTSTRAP
+// ══════════════════════════════════════════════════════════════════════════════
 setMode('text');
 </script>
 </body>
