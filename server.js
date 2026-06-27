@@ -140,6 +140,13 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    // ── DELIVERY / SEEN ACKNOWLEDGMENT ──────────────────────────────────────
+    if (msg.type === 'delivery-ack' || msg.type === 'seen-ack') {
+      if (msg.to) sendTo(myRoom, msg.to, { ...msg, from: myId });
+      else        broadcast(myRoom, { ...msg, from: myId }, myId);
+      return;
+    }
+
     // ── TYPING INDICATOR ─────────────────────────────────────────────────────
     // Client sends: { type: 'typing', to?: peerId, isTyping: bool }
     if (msg.type === 'typing') {

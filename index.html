@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="lib/pdf.min.js"></script>
+<script src="lib/jszip.min.js"></script>
 <style>
   :root {
     --bg: #0d0f14;
@@ -272,7 +273,7 @@
   }
 
   /* Copy button on text bubbles */
-  .msg-bubble-wrap { position: relative; max-width: 100%; }
+  .msg-bubble-wrap { position: relative; max-width: 100%; min-width: 72px; }
   .msg-copy-btn {
     position: absolute; top: 6px; right: 6px;
     background: var(--surface3); border: 1px solid var(--border2);
@@ -284,6 +285,16 @@
   .msg-bubble-wrap:hover .msg-copy-btn,
   .msg-bubble-wrap:focus-within .msg-copy-btn { opacity: 1; pointer-events: auto; }
   .msg-copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+  /* Message status ticks (sent/delivered/seen) */
+  .msg-status {
+    font-size: 11px;
+    line-height: 1;
+    user-select: none;
+    margin-top: 2px;
+    padding-right: 2px;
+  }
+  .msg-status .tick { color: var(--text3); }
 
   /* Code bubble */
   .msg-code-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; min-width: min(260px, 90vw); max-width: min(480px, 90vw); }
@@ -527,12 +538,55 @@
 
   /* Image lightbox modal */
   #image-lightbox {
-    position: fixed; inset: 0; z-index: 1000;
+    position: fixed; inset: 0; z-index: 1002;
     background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
     display: none; flex-direction: column; align-items: center;
     padding: 0; user-select: none;
   }
   #image-lightbox.show { display: flex; }
+
+  /* ZIP browser */
+  #zip-browser {
+    position: fixed; inset: 0; z-index: 1001;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+    display: none; flex-direction: column;
+    padding: 0;
+  }
+  #zip-browser.show { display: flex; }
+  .zip-browser-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; background: rgba(0,0,0,0.5);
+  }
+  .zip-browser-header span { font-size: 14px; color: rgba(255,255,255,0.8); }
+  .zip-browser-body {
+    flex: 1; overflow: auto; padding: 16px 20px;
+  }
+
+  /* ZIP browser */
+  #zip-browser {
+    position: fixed; inset: 0; z-index: 1001;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+    display: none; flex-direction: column;
+    padding: 0;
+  }
+  #zip-browser.show { display: flex; }
+  .zip-browser-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; background: rgba(0,0,0,0.5);
+  }
+  .zip-browser-header span { font-size: 14px; color: rgba(255,255,255,0.8); }
+  .zip-browser-body {
+    flex: 1; overflow: auto; padding: 16px 20px;
+  }
+  .zip-loading { color: rgba(255,255,255,0.5); font-size: 13px; text-align: center; padding: 40px; }
+  .zip-tree { list-style: none; margin: 0; padding: 0; }
+  .zip-tree li { padding: 3px 0; cursor: default; display: flex; align-items: center; gap: 4px; font-size: 13px; color: rgba(255,255,255,0.85); flex-wrap: wrap; }
+  .zip-tree li.folder { font-weight: 500; color: rgba(255,255,255,0.7); cursor: pointer; }
+  .zip-tree li.folder:hover { color: #fff; }
+  .zip-tree li.file { cursor: pointer; }
+  .zip-tree li.file:hover { color: #fff; background: rgba(255,255,255,0.08); border-radius: 4px; }
+  .zip-tree .zip-sub { list-style: none; margin: 0; padding: 0; width: 100%; }
+  .zip-tree .zip-toggle { font-size: 9px; width: 14px; text-align: center; flex-shrink: 0; }
   .lightbox-top-bar {
     position: absolute; top: 0; left: 0; right: 0; z-index: 10;
     display: flex; align-items: center; justify-content: center; gap: 12px;
@@ -579,7 +633,7 @@
   .lightbox-text-wrap pre {
     font-family: var(--mono); font-size: 13px; line-height: 1.6;
     color: var(--text); white-space: pre-wrap; word-break: break-all;
-    margin: 0;
+    margin: 0; user-select: text;
   }
   .lightbox-actions {
     display: flex; gap: 8px; align-items: center;
@@ -807,6 +861,21 @@
     <button class="lightbox-btn lightbox-zoom-btn" id="lightbox-zoom-reset" title="Reset zoom">⟲</button>
     <button class="lightbox-btn lightbox-zoom-btn" id="lightbox-zoom-in" title="Zoom in">+</button>
     <button class="lightbox-btn" id="lightbox-dl-btn">⬇ download</button>
+    <button class="lightbox-btn" id="lightbox-copy-btn" style="display:none">copy</button>
+  </div>
+</div>
+
+<!-- ZIP browser modal -->
+<div id="zip-browser">
+  <div class="zip-browser-header">
+    <span id="zip-browser-title">Archive</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="lightbox-btn" id="zip-browser-dl-btn" style="font-size:11px;padding:4px 10px">⬇ download</button>
+      <button class="lightbox-close" onclick="closeZipBrowser()">&times;</button>
+    </div>
+  </div>
+  <div class="zip-browser-body" id="zip-browser-body">
+    <div class="zip-loading">Extracting…</div>
   </div>
 </div>
 
@@ -823,10 +892,10 @@ const ICE_SERVERS = [
 ];
 
 // local
-// const SIGNALING_URL = 'http://localhost:4040';
+const SIGNALING_URL = 'http://localhost:4040';
 
 //server
-const SIGNALING_URL = 'wss://codedrop-b1t9.onrender.com' || 'wss://codedrop-tlt0.onrender.com';
+// const SIGNALING_URL = 'wss://codedrop-b1t9.onrender.com' || 'wss://codedrop-tlt0.onrender.com';
 
 // Reconnection: exponential backoff config
 const RECONNECT_BASE_MS  = 1_000;  // start at 1s
@@ -851,6 +920,9 @@ let sensitiveMode = false;
 let currentView  = 'peers';       // mobile active view
 let unreadChat   = 0;
 const fileStore  = {};
+const messageStatus = new Map(); // msgId -> { status: 'sent'|'delivered'|'seen' }
+const seenAcked = new Set(); // msgIds we've already sent seen-ack for
+let _historySaving = true; // set false during restore to avoid re-saving
 
 // Typing indicator state: Map<peerId, { name, timer }>
 const typingPeers = new Map();
@@ -879,6 +951,20 @@ function showView(view) {
   if (view === 'chat') {
     unreadChat = 0;
     document.getElementById('chat-badge').classList.remove('show');
+    // Send seen-acks for all received messages now visible
+    setTimeout(() => {
+      const msgs = document.querySelectorAll('#messages .msg:not(.own)[data-msgid]');
+      msgs.forEach(el => {
+        const mid = el.getAttribute('data-msgid');
+        const senderId = el.getAttribute('data-sender');
+        if (mid && !seenAcked.has(mid)) {
+          seenAcked.add(mid);
+          if (senderId && peers[senderId]?.dcOpen) {
+            dcSend(senderId, { type: 'seen-ack', targetMsgId: mid });
+          }
+        }
+      });
+    }, 50);
     setTimeout(() => {
       const m = document.getElementById('messages');
       if (m) m.scrollTop = m.scrollHeight;
@@ -932,6 +1018,7 @@ function copyRoom() {
 }
 
 function leaveRoom() {
+  try { localStorage.removeItem('codedrop_session'); } catch (_) {}
   wsIntentionalClose = true;
   clearReconnect();
   stopWsPing();
@@ -945,6 +1032,7 @@ function leaveRoom() {
 function initRoom(name) {
   myName = name;
   myId   = randomId(10);
+  try { localStorage.setItem('codedrop_session', JSON.stringify({ myName, roomId })); } catch (_) {}
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('room-val-display').textContent = roomId;
@@ -1124,6 +1212,14 @@ async function handleServerMsg(msg) {
       removePeer(msg.peerId);
       break;
 
+    // ── Delivery / seen acknowledgments (server-relayed) ──────────────────
+    case 'delivery-ack':
+      if (msg.targetMsgId) updateMsgStatus(msg.targetMsgId, 'delivered');
+      break;
+    case 'seen-ack':
+      if (msg.targetMsgId) updateMsgStatus(msg.targetMsgId, 'seen');
+      break;
+
     // ── Typing indicator (server-relayed) ─────────────────────────────────
     case 'typing':
       handleTypingEvent(msg);
@@ -1131,6 +1227,12 @@ async function handleServerMsg(msg) {
 
     // ── Chat messages relayed via signaling server ─────────────────────────
     case 'message':
+      // Send delivery acknowledgment via WS (or DC if available)
+      if (msg.msgId && msg.from) {
+        const ack = { type: 'delivery-ack', targetMsgId: msg.msgId, to: msg.from };
+        if (peers[msg.from]?.dcOpen) dcSend(msg.from, ack);
+        else wsSend(ack);
+      }
       receiveMessage(msg);
       break;
 
@@ -1274,9 +1376,13 @@ function setupDataChannel(peerId, dc) {
       if (b) {
         const fileData = b.parts.join('');
         delete chunkBuffer[msg.transferId];
-        fileStore[b.meta.fileDataId] = { name: b.meta.filename, data: fileData };
+        fileStore[b.meta.fileDataId] = { name: b.meta.filename, data: fileData, msgId: b.meta.msgId };
+        // Send delivery acknowledgment for file messages
+        if (b.meta.msgId) {
+          dcSend(peerId, { type: 'delivery-ack', targetMsgId: b.meta.msgId });
+        }
         receiveMessage({
-          from: peerId, msgType: 'file',
+          from: peerId, msgId: b.meta.msgId, msgType: 'file',
           filename: b.meta.filename, fileSize: b.meta.fileSize,
           fileDataId: b.meta.fileDataId,
           senderName: peers[peerId]?.name, targetPeer: 'broadcast',
@@ -1285,12 +1391,42 @@ function setupDataChannel(peerId, dc) {
       return;
     }
 
+    // Delivery / seen acknowledgments
+    if (msg.type === 'delivery-ack') {
+      if (msg.targetMsgId) updateMsgStatus(msg.targetMsgId, 'delivered');
+      return;
+    }
+    if (msg.type === 'seen-ack') {
+      if (msg.targetMsgId) updateMsgStatus(msg.targetMsgId, 'seen');
+      return;
+    }
+
     if (msg.type === 'message') {
       msg.from = peerId;
       msg.senderName = peers[peerId]?.name || peerId.slice(0, 6);
+      // Send delivery acknowledgment back to sender
+      if (msg.msgId) {
+        dcSend(peerId, { type: 'delivery-ack', targetMsgId: msg.msgId });
+      }
       receiveMessage(msg);
     }
   };
+}
+
+function updateMsgStatus(msgId, status) {
+  if (!messageStatus.has(msgId)) return;
+  const entry = messageStatus.get(msgId);
+  if (status === 'delivered' && entry.status === 'sent') entry.status = 'delivered';
+  else if (status === 'seen') entry.status = 'seen';
+  else return;
+  // Update the DOM element
+  const statusEl = document.querySelector(`.msg-status[data-msgid="${msgId}"]`);
+  if (!statusEl) return;
+  const tickSpan = statusEl.querySelector('.tick');
+  if (!tickSpan) return;
+  if (entry.status === 'delivered' || entry.status === 'seen') {
+    tickSpan.textContent = '\u2713\u2713';
+  }
 }
 
 function dcSend(peerId, data) {
@@ -1457,8 +1593,29 @@ function receiveMessage(msg) {
     updatePeerList();
   }
   renderMessage(msg, false);
+  // If we're viewing the chat, send seen acknowledgment to the sender
+  if (inView && msg.msgId && msg.from && !seenAcked.has(msg.msgId)) {
+    seenAcked.add(msg.msgId);
+    const fromPeer = msg.from;
+    if (peers[fromPeer]?.dcOpen) dcSend(fromPeer, { type: 'seen-ack', targetMsgId: msg.msgId });
+  }
   // Play notification sound for incoming messages from others
   playNotificationSound();
+}
+
+const MAX_HISTORY = 200;
+function saveToHistory(msg, isOwn) {
+  try {
+    let hist = JSON.parse(localStorage.getItem('codedrop_history') || '[]');
+    // Replace the last entry if it has the same msgId (deduplicate)
+    if (msg.msgId && hist.length && hist[hist.length - 1].msg.msgId === msg.msgId) {
+      hist[hist.length - 1] = { msg, isOwn };
+    } else {
+      hist.push({ msg, isOwn });
+    }
+    if (hist.length > MAX_HISTORY) hist = hist.slice(-MAX_HISTORY);
+    localStorage.setItem('codedrop_history', JSON.stringify(hist));
+  } catch (_) {}
 }
 
 /**
@@ -1466,12 +1623,15 @@ function receiveMessage(msg) {
  * Includes a "copy" button on all message types.
  */
 function renderMessage(msg, isOwn) {
+  if (_historySaving && msg.msgType !== 'file') saveToHistory(msg, isOwn);
   const container = document.getElementById('messages');
   const empty = container.querySelector('.empty-state');
   if (empty) empty.remove();
 
   const el   = document.createElement('div');
   el.className = 'msg' + (isOwn ? ' own' : '');
+  if (msg.msgId) el.setAttribute('data-msgid', msg.msgId);
+  if (!isOwn && msg.from) el.setAttribute('data-sender', msg.from);
 
   const peer   = isOwn ? null : peers[msg.from];
   const color  = isOwn ? '#5b7cff' : (peer?.color || '#888');
@@ -1531,6 +1691,8 @@ function renderMessage(msg, isOwn) {
     const isVideo = msg.fileDataId && isVideoFile(msg.filename);
     const isPdf = msg.fileDataId && isPDFFile(msg.filename);
     const isViewable = msg.fileDataId && isViewableFile(msg.filename);
+    const isZip = msg.fileDataId && isZipFile(msg.filename);
+    const isOffice = msg.fileDataId && isOfficeFile(msg.filename);
     if (isImage) {
       const f = fileStore[msg.fileDataId];
       const dataUrl = f ? f.data : '';
@@ -1540,7 +1702,6 @@ function renderMessage(msg, isOwn) {
         </div>
         <div class="msg-image-footer">
           <span>${escapeHtml(msg.filename)} · ${formatSize(msg.fileSize)}</span>
-          <button class="img-dl-btn" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">⬇ download</button>
         </div>
       </div>`;
     } else if (isVideo) {
@@ -1554,7 +1715,6 @@ function renderMessage(msg, isOwn) {
         </div>
         <div class="msg-image-footer">
           <span>${escapeHtml(msg.filename)} · ${formatSize(msg.fileSize)}</span>
-          <button class="img-dl-btn" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">⬇ download</button>
         </div>
       </div>`;
     } else if (isPdf) {
@@ -1565,10 +1725,35 @@ function renderMessage(msg, isOwn) {
         </div>
         <div class="msg-image-footer">
           <span>${escapeHtml(msg.filename)} · ${formatSize(msg.fileSize)}</span>
-          <button class="img-dl-btn" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">⬇ download</button>
         </div>
       </div>`;
       setTimeout(() => renderPDFPreview(msg.fileDataId, previewId), 50);
+
+    } else if (isOffice) {
+      const icon = getFileIcon(msg.filename);
+      contentHtml = `<div class="msg-file-block">
+        <div class="file-icon">${icon}</div>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(msg.filename)}</div>
+          <div class="file-size">${formatSize(msg.fileSize)}</div>
+        </div>
+        <div class="file-actions">
+          <button class="file-action-btn text" onclick="event.stopPropagation(); openOfficeViewer('${msg.fileDataId}')">📄 view</button>
+        </div>
+      </div>`;
+
+    } else if (isZip) {
+      const icon = getFileIcon(msg.filename);
+      contentHtml = `<div class="msg-file-block" onclick="openZipBrowser('${msg.fileDataId}')">
+        <div class="file-icon">${icon}</div>
+        <div class="file-info">
+          <div class="file-name">${escapeHtml(msg.filename)}</div>
+          <div class="file-size">${formatSize(msg.fileSize)}</div>
+        </div>
+        <div class="file-actions">
+          <button class="file-action-btn text" onclick="event.stopPropagation(); openZipBrowser('${msg.fileDataId}')">📦 extract</button>
+        </div>
+      </div>`;
 
     } else if (isViewable) {
       const icon = getFileIcon(msg.filename);
@@ -1580,7 +1765,6 @@ function renderMessage(msg, isOwn) {
         </div>
         <div class="file-actions">
           <button class="file-action-btn text" onclick="event.stopPropagation(); openImageLightbox('${msg.fileDataId}')">text</button>
-          <button class="file-action-btn dl" onclick="event.stopPropagation(); downloadFile('${msg.fileDataId}')">dl</button>
         </div>
       </div>`;
     } else {
@@ -1605,6 +1789,7 @@ function renderMessage(msg, isOwn) {
         ${!isOwn && msg.targetPeer !== 'broadcast' ? '<span style="font-size:9px;color:var(--accent)">dm</span>' : ''}
       </div>
       ${contentHtml}
+      ${isOwn && msg.msgId ? `<span class="msg-status" data-msgid="${msg.msgId}"><span class="tick">\u2713</span></span>` : ''}
     </div>`;
 
   container.appendChild(el);
@@ -1615,7 +1800,8 @@ function renderMessage(msg, isOwn) {
 // SEND FUNCTIONS
 // ══════════════════════════════════════════════════════════════════════════════
 function buildMsg(extra) {
-  return { type: 'message', from: myId, senderName: myName, targetPeer: selectedPeer, ...extra };
+  const msgId = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 8);
+  return { type: 'message', from: myId, senderName: myName, targetPeer: selectedPeer, msgId, ...extra };
 }
 
 function detectEnv(text) {
@@ -1647,12 +1833,13 @@ function sendText() {
   } else {
     const lang = detectLang(text);
     if (lang) {
-      msg = buildMsg({ msgType: 'code', content: text, filename: 'snippet.' + lang, lang });
+      msg = buildMsg({ msgType: 'code', content: text });
     } else {
       msg = buildMsg({ msgType: 'text', content: text });
     }
   }
   sendToPeer(selectedPeer, msg);
+  if (msg.msgId) messageStatus.set(msg.msgId, { status: 'sent' });
   renderMessage(msg, true);
   input.value = '';
   input.style.height = 'auto';
@@ -1667,7 +1854,8 @@ function sendFile(file) {
     const dataUrl     = e.target.result;
     const fileDataId  = 'file_' + Math.random().toString(36).substr(2, 12);
     const transferId  = 'xfr_'  + Math.random().toString(36).substr(2, 8);
-    fileStore[fileDataId] = { name: file.name, data: dataUrl };
+    const fileMsgId = 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 8);
+    fileStore[fileDataId] = { name: file.name, data: dataUrl, msgId: fileMsgId };
 
     const totalLen    = dataUrl.length;
     const totalChunks = Math.ceil(totalLen / CHUNK_SIZE);
@@ -1675,7 +1863,7 @@ function sendFile(file) {
     const sendChunked = (peerId) => {
       const peer = peers[peerId];
       if (!peer || !peer.dcOpen) return;
-      dcSend(peerId, { type: 'chunk-start', transferId, fileDataId, filename: file.name, fileSize: file.size, totalChunks });
+      dcSend(peerId, { type: 'chunk-start', transferId, fileDataId, msgId: fileMsgId, filename: file.name, fileSize: file.size, totalChunks });
       let i = 0;
       function sendNext() {
         if (i >= totalChunks) { dcSend(peerId, { type: 'chunk-end', transferId }); return; }
@@ -1689,7 +1877,8 @@ function sendFile(file) {
     if (selectedPeer === 'broadcast') Object.keys(peers).forEach(sendChunked);
     else sendChunked(selectedPeer);
 
-    renderMessage({ from: myId, msgType: 'file', filename: file.name, fileSize: file.size, fileDataId, targetPeer: selectedPeer }, true);
+    messageStatus.set(fileMsgId, { status: 'sent' });
+    renderMessage({ from: myId, msgId: fileMsgId, msgType: 'file', filename: file.name, fileSize: file.size, fileDataId, targetPeer: selectedPeer }, true);
     showToast('Sending: ' + file.name);
     if (window.innerWidth < 768) showView('chat');
   };
@@ -1792,7 +1981,7 @@ function getFileIcon(name) {
     js:'📜',ts:'📜',py:'🐍',go:'🐹',rs:'🦀',java:'☕',html:'🌐',css:'🎨',
     json:'📋',yml:'📋',yaml:'📋',env:'🔐',zip:'📦',gz:'📦',tar:'📦',rar:'📦',
     png:'🖼',jpg:'🖼',jpeg:'🖼',gif:'🖼',svg:'🖼',webp:'🖼',pdf:'📄',
-    md:'📝',txt:'📝',sh:'⚙',dockerfile:'🐳',sql:'🗄',csv:'📊',
+    md:'📝',txt:'📝',sh:'⚙',dockerfile:'🐳',sql:'🗄',csv:'📊',docx:'📘',xlsx:'📗',pptx:'📙',
   };
   return map[ext] || (name.startsWith('.') ? '🔐' : '📁');
 }
@@ -1819,7 +2008,16 @@ function isTextFile(name) {
 }
 
 function isViewableFile(name) {
-  return isImageFile(name) || isVideoFile(name) || isPDFFile(name) || isTextFile(name);
+  if (isTextFile(name)) return true;
+  const base = name.split('/').pop() || name;
+  if (!base.includes('.')) return ['Makefile', 'Dockerfile', '.gitignore', '.editorconfig', '.gitattributes'].includes(base);
+  return false;
+}
+function isZipFile(name) {
+  return (name.split('.').pop() || '').toLowerCase() === 'zip';
+}
+function isOfficeFile(name) {
+  return ['docx', 'xlsx', 'pptx'].includes((name.split('.').pop() || '').toLowerCase());
 }
 
 function renderPDFPreview(fileDataId, previewId) {
@@ -1858,7 +2056,7 @@ function renderPDFPreview(fileDataId, previewId) {
 }
 
 const LANG_PATTERNS = [
-  { lang: 'js',   patterns: [/=>/, /\b(const|let|var|function|import|export|require|module\.exports|console\.)\b/, /\.js$/] },
+  { lang: 'js',   patterns: [/=>/, /\b(const|let|var)\b/, /\bfunction\b/, /\b(import|export)\b/, /\b(require|module\.exports)\b/, /\bconsole\.\b/, /\.js$/] },
   { lang: 'ts',   patterns: [/\b(interface|type|as|enum|implements|readonly)\b/, /:\s*(string|number|boolean|void|any)\b/, /\.tsx?$/] },
   { lang: 'py',   patterns: [/\b(def |class |import |from |if __name__|print\s*\(|:\s*pass$|\.py$)/] },
   { lang: 'go',   patterns: [/\b(package |func |import \(|defer |go func|\.go$)/] },
@@ -1915,6 +2113,8 @@ function openImageLightbox(fileDataId) {
   document.getElementById('lightbox-filename').textContent = f.name;
   const dl = document.getElementById('lightbox-dl-btn');
   dl.onclick = () => downloadFile(fileDataId);
+  const copyBtn = document.getElementById('lightbox-copy-btn');
+  copyBtn.style.display = 'none';
 
   // Hide all content types first
   const img = document.getElementById('lightbox-img');
@@ -1953,9 +2153,31 @@ function openImageLightbox(fileDataId) {
     textWrap.style.display = '';
     actions.classList.add('hide-zoom');
     setupBasicInteractions(wrap);
+    copyBtn.style.display = '';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(textEl.textContent).then(() => {
+        copyBtn.textContent = 'copied!';
+        setTimeout(() => { copyBtn.textContent = 'copy'; }, 1800);
+      }).catch(() => showToast('Copy failed'));
+    };
     fetch(f.data).then(r => r.text()).then(t => {
       textEl.textContent = t;
     }).catch(() => { textEl.textContent = 'Unable to display file content'; });
+  } else {
+    // Any other file type — try to display as text
+    textWrap.style.display = '';
+    actions.classList.add('hide-zoom');
+    setupBasicInteractions(wrap);
+    copyBtn.style.display = '';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(textEl.textContent).then(() => {
+        copyBtn.textContent = 'copied!';
+        setTimeout(() => { copyBtn.textContent = 'copy'; }, 1800);
+      }).catch(() => showToast('Copy failed'));
+    };
+    fetch(f.data).then(r => r.text()).then(t => {
+      textEl.textContent = t;
+    }).catch(() => { textEl.textContent = 'Unable to display as text — try downloading'; });
   }
 
   document.getElementById('image-lightbox').classList.add('show');
@@ -2040,6 +2262,223 @@ function closeImageLightbox() {
   }
   lightboxKeyHandler = lightboxWheelHandler = lightboxMouseDownHandler = lightboxMouseMoveHandler = lightboxMouseUpHandler = lightboxBodyClickHandler = null;
   resetZoom();
+}
+
+/* ── ZIP browser ─────────────────────────────────────────────────────────── */
+function openZipBrowser(fileDataId) {
+  const f = fileStore[fileDataId];
+  if (!f) { showToast('File not available'); return; }
+  document.getElementById('zip-browser-title').textContent = f.name;
+  document.getElementById('zip-browser-body').innerHTML = '<div class="zip-loading">Extracting…</div>';
+  document.getElementById('zip-browser').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('zip-browser').setAttribute('data-file-id', fileDataId);
+  const dlBtn = document.getElementById('zip-browser-dl-btn');
+  dlBtn.onclick = () => downloadFile(fileDataId);
+
+  // Convert data URL to blob for JSZip
+  fetch(f.data).then(r => r.arrayBuffer()).then(buf => {
+    JSZip.loadAsync(buf).then(zip => {
+      const entries = [];
+      zip.forEach((relPath, entry) => { entries.push({ path: relPath, dir: entry.dir }); });
+      entries.sort((a, b) => a.path.localeCompare(b.path));
+      renderZipTree(entries, fileDataId, zip);
+    }).catch(() => {
+      document.getElementById('zip-browser-body').innerHTML = '<div class="zip-loading" style="color:var(--red)">Failed to extract archive</div>';
+    });
+  }).catch(() => {
+    document.getElementById('zip-browser-body').innerHTML = '<div class="zip-loading" style="color:var(--red)">Failed to read file</div>';
+  });
+}
+
+function renderZipTree(entries, fileDataId, zip) {
+  const body = document.getElementById('zip-browser-body');
+  // Build a nested structure
+  const root = { children: {} };
+  for (const entry of entries) {
+    const parts = entry.path.replace(/\/$/, '').split('/');
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isLast = i === parts.length - 1;
+      if (isLast && !entry.dir) {
+        node.children[part] = { file: true, name: part, path: entry.path };
+      } else {
+        if (!node.children[part]) node.children[part] = { dir: true, name: part, children: {}, open: true };
+        node = node.children[part];
+      }
+    }
+  }
+  let html = '<ul class="zip-tree">';
+  html += renderZipNode(root.children, 0, fileDataId);
+  html += '</ul>';
+  body.innerHTML = html;
+  // Attach toggle handlers
+  body.querySelectorAll('.zip-toggle').forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const li = el.closest('li.folder');
+      if (!li) return;
+      const sub = li.querySelector('.zip-sub');
+      if (sub) {
+        sub.style.display = sub.style.display === 'none' ? '' : 'none';
+        el.textContent = sub.style.display === 'none' ? '▶' : '▼';
+      }
+    };
+  });
+  body.querySelectorAll('.file[data-zip-path]').forEach(el => {
+    el.onclick = () => openZipEntry(el.getAttribute('data-zip-path'), el.getAttribute('data-zip-id'));
+  });
+}
+
+function renderZipNode(children, depth, fileDataId) {
+  let html = '';
+  const keys = Object.keys(children).sort((a, b) => {
+    const aDir = children[a].dir;
+    const bDir = children[b].dir;
+    if (aDir && !bDir) return -1;
+    if (!aDir && bDir) return 1;
+    return a.localeCompare(b);
+  });
+  for (const key of keys) {
+    const node = children[key];
+    if (node.dir) {
+      html += `<li class="folder" style="padding-left:${depth * 20}px"><span class="zip-toggle">▼</span> 📁 ${escapeHtml(node.name)}`;
+      const sub = renderZipNode(node.children, depth + 1, fileDataId);
+      if (sub) html += `<ul class="zip-sub">${sub}</ul>`;
+      html += '</li>';
+    } else {
+      const icon = getFileIcon(node.name);
+      html += `<li class="file" style="padding-left:${(depth + 1) * 20}px" data-zip-path="${escapeHtml(node.path)}" data-zip-id="${fileDataId}">${icon} ${escapeHtml(node.name)}</li>`;
+    }
+  }
+  return html;
+}
+
+function openZipEntry(path, fileDataId) {
+  const f = fileStore[fileDataId];
+  if (!f) return;
+  fetch(f.data).then(r => r.arrayBuffer()).then(buf => {
+    JSZip.loadAsync(buf).then(zip => {
+      const entry = zip.file(path);
+      if (!entry) { showToast('File not found in archive'); return; }
+      entry.async('blob').then(blob => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+          const innerId = 'zip_inner_' + Math.random().toString(36).substr(2, 10);
+          fileStore[innerId] = { name: path.split('/').pop(), data: dataUrl };
+          openImageLightbox(innerId);
+        };
+        reader.readAsDataURL(blob);
+      });
+    }).catch(() => showToast('Failed to read archive'));
+  }).catch(() => showToast('Failed to read file'));
+}
+
+function closeZipBrowser() {
+  document.getElementById('zip-browser').classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function openOfficeViewer(fileDataId) {
+  const f = fileStore[fileDataId];
+  if (!f) { showToast('File not available'); return; }
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  showToast('Extracting ' + ext.toUpperCase() + '…');
+  fetch(f.data).then(r => r.arrayBuffer()).then(buf => {
+    JSZip.loadAsync(buf).then(zip => {
+      const xpathText = (doc, localName) => {
+        const out = [];
+        const iter = doc.evaluate('//*[local-name()="' + localName + '"]', doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        for (let i = 0; i < iter.snapshotLength; i++) out.push(iter.snapshotItem(i).textContent);
+        return out;
+      };
+      const xpathBlocks = (doc, localName, textLocalName) => {
+        const out = [];
+        const iter = doc.evaluate('//*[local-name()="' + localName + '"]', doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        for (let i = 0; i < iter.snapshotLength; i++) {
+          const block = iter.snapshotItem(i);
+          const parts = [];
+          const tIter = doc.evaluate('.//*[local-name()="' + textLocalName + '"]', block, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+          for (let j = 0; j < tIter.snapshotLength; j++) parts.push(tIter.snapshotItem(j).textContent);
+          if (parts.length) out.push(parts.join(''));
+        }
+        return out;
+      };
+
+      if (ext === 'docx') {
+        const entry = zip.file('word/document.xml');
+        if (!entry) { showToast('Invalid document'); return; }
+        entry.async('text').then(xml => {
+          const doc = new DOMParser().parseFromString(xml, 'text/xml');
+          const paragraphs = xpathBlocks(doc, 'p', 't');
+          const content = paragraphs.length ? paragraphs.join('\n\n') : '(empty document)';
+          openOfficeTextLightbox(content, f.name);
+        }).catch(() => showToast('Failed to parse document'));
+      } else if (ext === 'xlsx') {
+        const ssEntry = zip.file('xl/sharedStrings.xml');
+        const sheetEntry = zip.file('xl/worksheets/sheet1.xml');
+        if (!sheetEntry) { showToast('No sheet found'); return; }
+        Promise.all([
+          ssEntry ? ssEntry.async('text') : Promise.resolve(null),
+          sheetEntry.async('text')
+        ]).then(([ssXml, sheetXml]) => {
+          const sharedStrings = [];
+          if (ssXml) {
+            const ssDoc = new DOMParser().parseFromString(ssXml, 'text/xml');
+            const tNodes = xpathText(ssDoc, 't');
+            sharedStrings.push(...tNodes);
+          }
+          const sheetDoc = new DOMParser().parseFromString(sheetXml, 'text/xml');
+          const lines = [];
+          const rowIter = sheetDoc.evaluate('//*[local-name()="row"]', sheetDoc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+          for (let r = 0; r < rowIter.snapshotLength; r++) {
+            const row = rowIter.snapshotItem(r);
+            const cells = [];
+            const cIter = sheetDoc.evaluate('.//*[local-name()="c"]', row, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+            for (let c = 0; c < cIter.snapshotLength; c++) {
+              const cell = cIter.snapshotItem(c);
+              const tAttr = cell.getAttribute('t');
+              const vIter = sheetDoc.evaluate('.//*[local-name()="v"]', cell, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+              const v = vIter.singleNodeValue;
+              if (tAttr === 's' && v) cells.push(sharedStrings[parseInt(v.textContent)] || '');
+              else if (v) cells.push(v.textContent);
+            }
+            if (cells.length) lines.push(cells.join('\t'));
+          }
+          openOfficeTextLightbox(lines.length ? lines.join('\n') : '(empty sheet)', f.name);
+        }).catch(() => showToast('Failed to parse spreadsheet'));
+      } else if (ext === 'pptx') {
+        const slidePromises = [];
+        zip.forEach((relPath, entry) => {
+          if (relPath.match(/^ppt\/slides\/slide\d+\.xml$/)) {
+            slidePromises.push(entry.async('text').then(xml => {
+              const doc = new DOMParser().parseFromString(xml, 'text/xml');
+              const texts = xpathBlocks(doc, 'sp', 't');
+              return texts.join(' ');
+            }));
+          }
+        });
+        if (!slidePromises.length) { showToast('No slides found'); return; }
+        Promise.all(slidePromises).then(slides => {
+          let content = '';
+          slides.forEach((text, i) => {
+            if (text.trim()) content += '--- Slide ' + (i + 1) + ' ---\n' + text.trim() + '\n\n';
+          });
+          openOfficeTextLightbox(content.trim() || '(empty presentation)', f.name);
+        }).catch(() => showToast('Failed to parse presentation'));
+      }
+    }).catch(() => showToast('Failed to read office file'));
+  }).catch(() => showToast('Failed to read file'));
+}
+
+function openOfficeTextLightbox(content, filename) {
+  const id = 'office_text_' + Math.random().toString(36).substr(2, 10);
+  const mime = 'text/plain';
+  const dataUrl = 'data:' + mime + ',' + encodeURIComponent(content);
+  fileStore[id] = { name: filename + '.txt', data: dataUrl };
+  openImageLightbox(id);
 }
 
 function resetZoom() {
@@ -2183,6 +2622,34 @@ document.getElementById('sensitive-btn').onclick = () => {
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 setMode('text');
+
+// Load persisted session & message history from localStorage
+try {
+  const raw = localStorage.getItem('codedrop_session');
+  if (raw) {
+    const session = JSON.parse(raw);
+    if (session.myName && session.roomId) {
+      roomId = session.roomId;
+      initRoom(session.myName);
+    }
+  }
+  // Restore message history
+  const hist = localStorage.getItem('codedrop_history');
+  if (hist) {
+    const entries = JSON.parse(hist);
+    if (entries.length) {
+      _historySaving = false;
+      const container = document.getElementById('messages');
+      const empty = container.querySelector('.empty-state');
+      if (empty) empty.remove();
+      entries.forEach(entry => renderMessage(entry.msg, entry.isOwn));
+      container.scrollTop = container.scrollHeight;
+      _historySaving = true;
+      // Re-save the full history (in case messages were pruned)
+      try { localStorage.setItem('codedrop_history', JSON.stringify(entries)); } catch (_) {}
+    }
+  }
+} catch (_) {}
 </script>
 </body>
 </html>
